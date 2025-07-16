@@ -51,6 +51,8 @@ class Range(NamedTuple):
 
     Parameters
     ----------
+    name: str
+        Name of the variable of which this is a range.
     lower : float
         Value at the lower end of the range.
     lower_included: bool
@@ -61,29 +63,8 @@ class Range(NamedTuple):
         Is the range inclusive of the upper value?
     """
 
+    name: str
     lower: float
     lower_included: bool
     upper: float
     upper_included: bool
-
-
-class Enumerator:
-    """
-    A class that assists in making sub to supergroup maps for an underlying
-    axis defined by a continuous variable, such as age.
-
-    E.g., something that takes you from "my age subgroups are... and my age
-    supergroups are..." to a sub : super group name/string dict.
-    """
-
-    pass
-
-
-class Aligner:
-    """
-    A class that takes in multiple sets of supergroups and defines the largest
-    common denominator set of subgroups which allow things to be aligned among
-    the groups.
-    """
-
-    pass
