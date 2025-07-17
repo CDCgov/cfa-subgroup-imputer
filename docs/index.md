@@ -51,12 +51,12 @@ In this case, we might want to track the location as a `property` which is share
 Or can they matter?
 Say we want to split out high and low risk groups, how does that work?
 
-### Enumeration versus imputation
+### Attribution versus imputation
 
-There are two related problems when handling subgroups and supergroups, which we term enumeration and imputation.
+There are two related problems when handling subgroups and supergroups, which we term attribution and imputation.
 To take age groups as an example, consider that we have measurements for supergroups "0-3 years", "4-11 years", and "12-17 years", and that we want to impute measurements on yearly age subgroups.
 
-_Enumeration_ is the process of specifying that the subgroup to supergroup map is:
+_Attribution_ is the process of specifying that the subgroup to supergroup map is:
 ```python
 sub_to_super = {
     "0 years" : "0-3 years",

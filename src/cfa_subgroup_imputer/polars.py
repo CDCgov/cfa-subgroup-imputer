@@ -2,77 +2,142 @@
 Module for polars interface.
 """
 
+from collections.abc import Collection
+
 import polars as pl
 
-from cfa_subgroup_imputer.groups import GroupMap
+from cfa_subgroup_imputer.attributor import CartesianAttributor
+from cfa_subgroup_imputer.groups import Group, GroupMap
+from cfa_subgroup_imputer.imputer import (
+    CategoricalWeights,
+    ContinuousWeights,
+    Disaggregator,
+)
+from cfa_subgroup_imputer.variables import (
+    GroupableTypes,
+    GroupingVariable,
+)
 
-# from cfa_subgroup_imputer.imputer import Disaggregator
-from cfa_subgroup_imputer.variables import GroupingVariable, MeasurementType
+
+def get_attributor():
+    raise NotImplementedError()
 
 
-def make_group_map(
-    subgroup_to_supergroup: dict[str, str],
+def get_weight():
+    raise NotImplementedError()
+
+
+def attribute_subgroups(
+    supergroup_df: pl.DataFrame,
     subgroup_df: pl.DataFrame,
-) -> GroupMap:
-    """
-    Makes a GroupMap for the given supergroups and subgroups
-    """
-    raise NotImplementedError()
-
-
-def populate_supergroup_data(
-    df: pl.DataFrame,
-    map: GroupMap,
-    measurements: dict[str, MeasurementType],
-) -> GroupMap:
-    """
-    Adds data from `df` for specified `measurements` to the supergroups in the `map`.
-    """
-    # Maybe this should be a GroupMap method?
-    raise NotImplementedError()
+    group_vartype: GroupingVariable,
+    **kwargs,
+) -> dict[str, str]:
+    supergroup_col = kwargs.get("supergroup_col", "group")
+    subgroup_col = kwargs.get("subgroup_col", "group")
+    supergroups = supergroup_df[supergroup_col].unique().to_list()
+    subgroups = subgroup_df[subgroup_col].unique().to_list()
+    if group_vartype.type == "Categorical":
+        return CartesianAttributor().attribute(
+            supergroups=supergroups, subgroups=subgroups
+        )
+    elif group_vartype.type == "Continuous":
+        # TODO: need to find some way to match something the user can provide here
+        #       to a column in the dataset and a particular Attributor, namely,
+        #       for now, the AgeGroupAttributor
+        raise NotImplementedError()
+    else:
+        raise RuntimeError(f"Unknown grouping variable type {group_vartype}")
 
 
 def disaggregate(
     supergroup_df: pl.DataFrame,
     subgroup_df: pl.DataFrame,
-    subgroup_to_supergroup: dict[str, str],
-    measurements: dict[str, MeasurementType],
-    group_vartype: GroupingVariable,
-):
+    subgroup_to_supergroup: pl.DataFrame | None,
+    subgroups_from: str,
+    subgroup_type: GroupableTypes,
+    loop_over: Collection[str] = [],
+    **kwargs,
+) -> pl.DataFrame:
     """
     Takes in a dataframe `df` with measurements for the `supergroups`.
     Imputes values for the subgroups and returns a dataframe with those.
 
     Parameters
     ----------
-    supergroup_df : pl.DataFrame
-        Dataframe with measurements at the supergroup level.
-        Must only contain: one column named "group" (pl.String) and the columns specified by `measurements` (numeric columns).
-        Must include exactly the supergroups included in `subgroup_to_supergroup`.
-    subgroup_df : pl.DataFrame
-        Dataframe with subgroup sizes and, optionally, weight adjustments and the variable defining the supergroup to subgroup relationships.
-        Must contain: one column named "group" (pl.String) and one column named "size" (a numeric column).
-        May contain: one column named "relative_weight" (a numeric column) and a set of axis columns
-        ("lower" and  "upper" (numeric columns), "lower_included" and "upper_included" (pl.Boolean))
-    subgroup_to_supergroup: dict[str, str]
-        Dict mapping names of all subgroups to their encompassing supergroups.
-    measurements: dict[str, MeasurementType]
-        The names of the columns in `supergroup_df` which have the data to be disaggregated, and the type thereof (see one_dimensional.MeasurementType).
-    method: DisaggregationMethod
-        The method to use for imputing subgroup values, see Disaggregator.
 
     Returns
     -------
     pl.DataFrame
         Dataframe with measurements imputed for the subgroups.
     """
-    # TODO: lots of correctness checking of the dataframes
-    # map = populate_supergroup_data(
-    #     supergroup_df,
-    #     make_group_map(
-    #         subgroup_to_supergroup,
-    #         subgroup_df,
-    #     ),
-    #     measurements,
-    # )
-    # return Disaggregator()(map).data_as_polars("subgroup")
+
+    group_vartype = GroupingVariable(subgroups_from, subgroup_type)
+
+    # Attribute subgroups
+    if subgroup_to_supergroup is None:
+        sub_to_super = attribute_subgroups(
+            supergroup_df, subgroup_df, group_vartype, **kwargs
+        )
+    else:
+        supergroup_col = kwargs.get("supergroup_col", "supergroup")
+        subgroup_col = kwargs.get("subgroup_col", "subgroup")
+        sub_to_super = dict(
+            zip(
+                subgroup_to_supergroup[subgroup_col].to_list(),
+                subgroup_to_supergroup[supergroup_col].to_list(),
+            )
+        )
+
+    if loop_over:
+        supergroup_df_looper = [
+            dfg[1] for dfg in supergroup_df.group_by(loop_over)
+        ]
+        # Broadcast static subgroup data up, or else make the list
+        if all(var in subgroup_df.columns for var in loop_over):
+            subgroup_df_list = [
+                dfg[1] for dfg in subgroup_df.group_by(loop_over)
+            ]
+        else:
+            subgroup_df_list = [subgroup_df] * len(supergroup_df_looper)
+    else:
+        supergroup_df_list = [supergroup_df]
+        subgroup_df_list = [subgroup_df]
+
+    assert len(supergroup_df_list) == len(subgroup_df_list)
+    return pl.concat(
+        [
+            _disaggregate(
+                super_df, sub_df, sub_to_super, group_vartype, **kwargs
+            )
+            for super_df, sub_df in zip(supergroup_df_list, subgroup_df_list)
+        ]
+    )
+
+
+def _disaggregate(
+    supergroup_df: pl.DataFrame,
+    subgroup_df: pl.DataFrame,
+    subgroup_to_supergroup: dict[str, str],
+    group_vartype: GroupingVariable,
+    **kwargs,
+) -> pl.DataFrame:
+    """
+    Internal disaggregation function for processed inputs.
+    """
+    all_groups = [
+        Group(name=group_name, group_vartype=group_vartype)
+        for group_name in list(set(subgroup_to_supergroup.values()))
+        + list(subgroup_to_supergroup.keys())
+    ]
+
+    map = GroupMap(subgroup_to_supergroup, all_groups)
+    map.add_data_from_polars(supergroup_df)
+    map.add_data_from_polars(subgroup_df)
+
+    weight_calculator = (
+        CategoricalWeights(group_vartype.name)
+        if group_vartype.type == "Categorical"
+        else ContinuousWeights()
+    )
+    return Disaggregator(weight_calculator)(map).data_to_polars("subgroup")

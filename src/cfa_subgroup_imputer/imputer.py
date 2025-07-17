@@ -15,14 +15,22 @@ class WeightCalculator(Protocol):
     def calculate(self, supergroup_name: str) -> dict[str, float]: ...
 
 
-class SizeWeights(WeightCalculator):
-    def size(self, group: Group):
-        size = group.get_measurement("size")
-        assert size.type in get_args(MassMeasurementType), (
-            "Size must be a mass measurement."
-        )
-        return size.value
+class CategoricalWeights(WeightCalculator):
+    def __init__(self, weight_from: str):
+        self.varname = weight_from
 
+    def weight(self, group: Group):
+        weight = group.get_measurement(self.varname)
+        assert weight.type in get_args(MassMeasurementType), (
+            "Weight must derive from a mass measurement."
+        )
+        return weight.value
+
+    def calculate(self, supergroup_name: str) -> dict[str, float]:
+        raise NotImplementedError()
+
+
+class ContinuousWeights(WeightCalculator):
     def calculate(self, supergroup_name: str) -> dict[str, float]:
         raise NotImplementedError()
 
@@ -40,6 +48,7 @@ class Disaggregator:
         Impute and disaggregate the given group map.
         """
         assert map.disaggregatable
+        raise NotImplementedError()
         # all_mass = map.density_to_mass("supergroup")
         # imputed_groups = [map.group(name) for name in all_mass.supergroups]
         # for supergroup_name in all_mass.supergroups:

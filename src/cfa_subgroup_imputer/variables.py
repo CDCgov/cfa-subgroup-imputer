@@ -71,7 +71,7 @@ class Range(NamedTuple):
     upper_included: bool
 
 
-GroupableTypes = Literal["Categorial", "Continuous"]
+GroupableTypes = Literal["Categorical", "Continuous"]
 
 
 class GroupingVariable(NamedTuple):

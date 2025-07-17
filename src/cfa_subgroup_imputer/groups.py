@@ -180,6 +180,12 @@ class GroupMap:
         self._assert_no_missing_data()
         assert self.aggregatable ^ self.disaggregatable
 
+    def add_data_from_polars(self, df: pl.DataFrame) -> Self:
+        """
+        Add the data found in this dataframe to the relevant groups.
+        """
+        raise NotImplementedError()
+
     @property
     def aggregatable(self) -> bool:
         """
@@ -202,9 +208,15 @@ class GroupMap:
         """
         raise NotImplementedError()
 
-    def data_as_polars(self, sub_or_super: GroupType) -> pl.DataFrame:
+    def data_to_polars(self, sub_or_super: GroupType) -> pl.DataFrame:
         """
         Creates a polars dataframe of the measurements in either the supergroups or subgroups.
+        """
+        raise NotImplementedError()
+
+    def data_from_polars(self, df: pl.DataFrame):
+        """
+        Populates measurements and attributes for groups found in the dataframe.
         """
         raise NotImplementedError()
 
