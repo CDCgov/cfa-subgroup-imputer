@@ -199,19 +199,3 @@ Thus we have $x(z) = z$ as age itself, while $y(z)$ remains the population densi
 The math works out identically as above.
 
 🚧 But do we need a special flag in the code? How do we want to handle this?
-
-
-## Spec/UI thinking
-
-It would be nice if we could provide file to file interface, since users might like to use this in a workflow in other languages, e.g. python, or as a step in a pipeline.
-A command line interface therefore seems called for.
-This means passing in or constructing the `sub : super` group map.
-- The easy way for developing would seem to be to require a dataframe passed in that does this.
-- The easy way for users to interact would seem to be to allow either
-  - Passing in a tabular data file, to capture irregular sub/supergroup cases like states and counties OR
-  - Construct the map on the fly based on
-    - One file of supergroups AND
-    - One file of subgroups AND
-    - An argument specifying the type of variable used for group definition, then
-        - If `group_vartype` is "continuous" we use continuous variable logic and assume some subgroups go in some supergroups, but not all
-        - If `group_vartype` is "categorical" assume that each supergroup contains one of each subgroup, and construct a `f"{super}_{sub}" : super` map.
