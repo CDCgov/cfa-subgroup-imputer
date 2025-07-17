@@ -2,92 +2,133 @@
 Submodule for broad-sense handling of supergroups and subgroups.
 """
 
-from collections.abc import Container, Iterable
-from typing import Literal, NamedTuple, Self
+from collections.abc import Iterable
+from typing import Any, Literal, Self, get_args
 
 import polars as pl
 
-from cfa_subgroup_imputer.one_dimensional import ImputableMeasurement
+from cfa_subgroup_imputer.variables import (
+    DensityMeasurementType,
+    GroupingVariable,
+    ImputableMeasurement,
+)
 
 GroupType = Literal["supergroup", "subgroup"]
 
 
-class Group(NamedTuple):
+class Group:
     """
     A class to represent a super or subgroup.
-
-    Parameters
-    ----------
-    name : str
-        The name defining the group.
-    size: float
-        The size of the group, e.g. number of people in it.
-    weight_adjustment: float
-        A value that accounts for a relative increase or decrease in how much mass a
-        subgroup contributes to a measurement compared to its size.
-    weight: float | None
-        Composite of size and weight_adjustment relative to other groups.
-        Should not be touched except by GroupMap.
-    measurements: Iterable[ImputableMeasurement] | None
-        Optional values that can be imputed from supergroups to subgroups (and back).
     """
 
-    name: str
-    size: float
-    weight_adjustment: float | None
-    weight: float | None
-    measurements: list[ImputableMeasurement] | None
+    def __init__(
+        self,
+        name: str,
+        group_vartype: GroupingVariable,
+        measurements: Iterable[ImputableMeasurement] = [],
+        properties: Iterable[tuple[str, Any]] = [],
+    ):
+        """
+        Group constructor
 
-    def alter_measurements(
-        self, measurements: list[ImputableMeasurement]
+        Parameters
+        ----------
+        name : str
+            The name defining the group.
+        group_vartype: float
+            The size of the group, e.g. number of people in it.
+        weight_adjustment: float
+            A value that accounts for a relative increase or decrease in how much mass a
+            subgroup contributes to a measurement compared to its size.
+        weight: float | None
+            Composite of size and weight_adjustment relative to other groups.
+            Should not be touched except by GroupMap.
+        measurements: Iterable[ImputableMeasurement] | None
+            Optional values that can be imputed from supergroups to subgroups (and back).
+        """
+        self.name = name
+        self.group_vartype = group_vartype
+        self.measurements = tuple(measurements)
+        self.properties = tuple(properties)
+        self._validate()
+
+    def _copy_except_measurements(
+        self, measurements: Iterable[ImputableMeasurement]
     ) -> Self:
-        assert self.measurements is not None
-        existing = [(m.name, m.type) for m in self.measurements]
-        proposed = [(m.name, m.type) for m in measurements]
-        assert set(existing) == set(proposed)
         return type(self)(
-            self.name,
-            self.size,
-            self.weight_adjustment,
-            self.weight,
-            measurements,
+            name=self.name,
+            group_vartype=self.group_vartype,
+            measurements=measurements,
+            properties=self.properties,
         )
 
-    def density_to_mass(self) -> Self:
+    def _validate(self):
+        assert all(
+            [isinstance(m, ImputableMeasurement) for m in self.measurements]
+        ), "All measurements must be ImputableMeasurements"
+        measurement_names = [m.name for m in self.measurements]
+        assert len(set(measurement_names)) == len(measurement_names), (
+            "Found multiple measurements for same variable."
+        )
+        # TODO: validate properties?
+
+    def add_measurement(self, measurement: ImputableMeasurement) -> Self:
+        """
+        Give this group a new measurement.
+        """
+        assert measurement.name not in [m.name for m in self.measurements], (
+            f"Cannot add measurement {measurement} to group {self.name} which already has {self.get_measurement(measurement.name)}"
+        )
+        return self._copy_except_measurements(
+            self.measurements + (measurement,)
+        )
+
+    def scale_measurements(self, val: float) -> Self:
+        """
+        Scale all group's measurements by a constant.
+        """
+        return self._copy_except_measurements(
+            [m * val for m in self.measurements]
+        )
+
+    def density_to_mass(self, size_from: str = "size") -> Self:
         """
         Make all measurements masses.
         """
         assert self.measurements is not None, (
             f"Cannot convert densities to masses for group {self.name} which has no measurements."
         )
-        return type(self)(
-            name=self.name,
-            size=self.size,
-            weight_adjustment=self.weight_adjustment,
-            weight=self.weight,
-            measurements=[
-                m.to_mass(self.size) if m.type == "density" else m
-                for m in self.measurements
-            ],
-        )
+        size = self.get_measurement(size_from).value
+        measurements = [
+            m.to_mass(size)
+            if m.type in get_args(DensityMeasurementType)
+            else m
+            for m in self.measurements
+        ]
+        return self._copy_except_measurements(measurements)
 
-    def mass_to_density(self, measurements: Container[str]) -> Self:
+    def get_measurement(self, name: str) -> ImputableMeasurement:
         """
-        Make selected measurements densities.
+        Retrieve stated measurement.
+        """
+        assert name in self.measurements, (
+            f"Group {self.name} has no measurement {name}"
+        )
+        return [m for m in self.measurements if m.name == name][0]
+
+    def restore_densities(self, size_from: str = "size") -> Self:
+        """
+        Undo density_to_mass().
         """
         assert self.measurements is not None, (
             f"Cannot convert masses to densities for group {self.name} which has no measurements."
         )
-        return type(self)(
-            name=self.name,
-            size=self.size,
-            weight_adjustment=self.weight_adjustment,
-            weight=self.weight,
-            measurements=[
-                m.to_density(self.size) if m.name in measurements else m
-                for m in self.measurements
-            ],
-        )
+        size = self.get_measurement(size_from).value
+        measurements = [
+            m.to_density(size) if m.name == "density_from_mass" else m
+            for m in self.measurements
+        ]
+        return self._copy_except_measurements(measurements)
 
 
 class GroupMap:
@@ -146,13 +187,6 @@ class GroupMap:
         """
         raise NotImplementedError()
 
-    def calculate_normalized_weights(self) -> Self:
-        """
-        Returns a new GroupMap with computed `.weight` for each Group where,
-        for each supergroup, the sum of the weights across subgroups is 1.
-        """
-        raise NotImplementedError()
-
     def density_to_mass(self, sub_or_super: GroupType) -> Self:
         """
         Put all density measurements in super or subgroups on mass scale for ease of downstream manipulation.
@@ -162,9 +196,7 @@ class GroupMap:
     def group(self, name: str) -> Group:
         return self.groups[name]
 
-    def mass_to_density(
-        self, sub_or_super: GroupType, measurements: Container[str]
-    ) -> Self:
+    def restore_densities(self, sub_or_super: GroupType) -> Self:
         """
         Undo density_to_mass for selected measurements.
         """
@@ -175,16 +207,6 @@ class GroupMap:
         Creates a polars dataframe of the measurements in either the supergroups or subgroups.
         """
         raise NotImplementedError()
-
-    @property
-    def densities(self) -> list[str]:
-        """
-        Which of the measurements in this GroupMap are densities?
-        """
-        name = list(self.sub_to_super.values())[0]
-        group = self.group(name)
-        assert group.measurements is not None
-        return [m.name for m in group.measurements if m.type == "density"]
 
     @property
     def disaggregatable(self) -> bool:

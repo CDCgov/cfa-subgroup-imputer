@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from typing import Protocol
 
 from cfa_subgroup_imputer.groups import Group
-from cfa_subgroup_imputer.one_dimensional import Range
+from cfa_subgroup_imputer.variables import Range
 
 
 class Enumerator(Protocol):

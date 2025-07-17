@@ -5,8 +5,9 @@ Module for polars interface.
 import polars as pl
 
 from cfa_subgroup_imputer.groups import GroupMap
-from cfa_subgroup_imputer.imputer import DisaggregationMethod, Disaggregator
-from cfa_subgroup_imputer.one_dimensional import MeasurementType
+
+# from cfa_subgroup_imputer.imputer import Disaggregator
+from cfa_subgroup_imputer.variables import GroupingVariable, MeasurementType
 
 
 def make_group_map(
@@ -36,7 +37,7 @@ def disaggregate(
     subgroup_df: pl.DataFrame,
     subgroup_to_supergroup: dict[str, str],
     measurements: dict[str, MeasurementType],
-    method: DisaggregationMethod = "uniform",
+    group_vartype: GroupingVariable,
 ):
     """
     Takes in a dataframe `df` with measurements for the `supergroups`.
@@ -66,12 +67,12 @@ def disaggregate(
         Dataframe with measurements imputed for the subgroups.
     """
     # TODO: lots of correctness checking of the dataframes
-    map = populate_supergroup_data(
-        supergroup_df,
-        make_group_map(
-            subgroup_to_supergroup,
-            subgroup_df,
-        ),
-        measurements,
-    )
-    return Disaggregator(method)(map).data_as_polars("subgroup")
+    # map = populate_supergroup_data(
+    #     supergroup_df,
+    #     make_group_map(
+    #         subgroup_to_supergroup,
+    #         subgroup_df,
+    #     ),
+    #     measurements,
+    # )
+    # return Disaggregator()(map).data_as_polars("subgroup")

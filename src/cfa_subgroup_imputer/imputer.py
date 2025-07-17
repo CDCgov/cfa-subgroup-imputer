@@ -2,66 +2,51 @@
 Module for imputation machinery.
 """
 
-from typing import Literal
+from typing import Protocol, get_args
 
 from cfa_subgroup_imputer.groups import (
     Group,
     GroupMap,
 )
+from cfa_subgroup_imputer.variables import MassMeasurementType
 
-DisaggregationMethod = Literal["uniform"]
+
+class WeightCalculator(Protocol):
+    def calculate(self, supergroup_name: str) -> dict[str, float]: ...
+
+
+class SizeWeights(WeightCalculator):
+    def size(self, group: Group):
+        size = group.get_measurement("size")
+        assert size.type in get_args(MassMeasurementType), (
+            "Size must be a mass measurement."
+        )
+        return size.value
+
+    def calculate(self, supergroup_name: str) -> dict[str, float]:
+        raise NotImplementedError()
 
 
 class Disaggregator:
     """
     A class which imputes and disaggregates subgroups.
-
-    For a GroupMap map and choice of method "uniform", usage is
-    Disaggregator(method="uniform")(map).
     """
 
-    def __init__(self, method: DisaggregationMethod):
-        if method == "uniform":
-            self.weight_calculator = Disaggregator.uniform_weight_calculator
-        elif method == "cubic_spline":
-            self.method = Disaggregator.cubic_spline_weight_calculator
-        else:
-            raise RuntimeError(f"Unknown method {method}")
+    def __init__(self, weight_calculator: WeightCalculator):
+        self.weight_calculator = weight_calculator
 
     def __call__(self, map: GroupMap) -> GroupMap:
         """
         Impute and disaggregate the given group map.
         """
         assert map.disaggregatable
-        all_mass = map.density_to_mass("supergroup")
-        weighted = self.weight_calculator(all_mass)
-        imputed_groups = []
-        for supergroup_name in weighted.supergroups:
-            imputed_groups.extend(
-                [
-                    Disaggregator.apportion_to_subgroup(
-                        weighted, subgroup_name, supergroup_name
-                    )
-                    for subgroup_name in weighted.subgroups(supergroup_name)
-                ]
-            )
-        return GroupMap(weighted.sub_to_super, imputed_groups).mass_to_density(
-            "subgroup", map.densities
-        )
+        # all_mass = map.density_to_mass("supergroup")
+        # imputed_groups = [map.group(name) for name in all_mass.supergroups]
+        # for supergroup_name in all_mass.supergroups:
+        # weights = self.weight_calculator.calculate(supergroup_name)
+        # TODO: use weights to apportion the supergroup measurements to the subgroups
+        # TODO: add the new data-inclusive subgroup to the list
 
-    @staticmethod
-    def apportion_to_subgroup(
-        map: GroupMap, supergroup_name, subgroup_name: str
-    ) -> Group:
-        supergroup = map.group(supergroup_name)
-        subgroup = map.group(subgroup_name)
-        assert supergroup.measurements is not None
-        assert subgroup.weight is not None
-        apportioned = [m * subgroup.weight for m in supergroup.measurements]
-        return subgroup.alter_measurements(apportioned)
-
-    @staticmethod
-    def uniform_weight_calculator(
-        map: GroupMap,
-    ) -> GroupMap:
-        return map.calculate_normalized_weights()
+        # return GroupMap(
+        #     all_mass.sub_to_super, imputed_groups
+        # ).restore_densities("subgroup")

@@ -1,10 +1,14 @@
 """
-Submodule for handling one-dimensional variables, be they measurements for imputing or axes for splitting groups.
+Submodule for handling variables, whether measurements or quantities used to define subgroups.
 """
 
 from typing import Literal, NamedTuple, Self
 
-MeasurementType = Literal["mass", "density"]
+MassMeasurementType = Literal["mass", "mass_from_density"]
+DensityMeasurementType = Literal["density", "density_from_mass"]
+MeasurementType = Literal[
+    "mass", "density", "mass_from_density", "density_from_mass"
+]
 """
 How a measurement behaves for disaggregation.
 
@@ -36,12 +40,12 @@ class ImputableMeasurement(NamedTuple):
 
     def to_mass(self, volume: float) -> Self:
         return type(self)(
-            value=self.value * volume, name=self.name, type="mass"
+            value=self.value * volume, name=self.name, type="mass_from_density"
         )
 
     def to_density(self, volume: float) -> Self:
         return type(self)(
-            value=self.value / volume, name=self.name, type="density"
+            value=self.value / volume, name=self.name, type="density_from_mass"
         )
 
 
@@ -51,8 +55,6 @@ class Range(NamedTuple):
 
     Parameters
     ----------
-    name: str
-        Name of the variable of which this is a range.
     lower : float
         Value at the lower end of the range.
     lower_included: bool
@@ -63,8 +65,26 @@ class Range(NamedTuple):
         Is the range inclusive of the upper value?
     """
 
-    name: str
     lower: float
     lower_included: bool
     upper: float
     upper_included: bool
+
+
+GroupableTypes = Literal["Categorial", "Continuous"]
+
+
+class GroupingVariable(NamedTuple):
+    """
+    A class for holding variables that can define subgroups
+
+    Parameters
+    name: str
+        The name of the variable.
+    type: GroupableTypes
+        The type of variable.
+    ----------
+    """
+
+    name: str
+    type: GroupableTypes
