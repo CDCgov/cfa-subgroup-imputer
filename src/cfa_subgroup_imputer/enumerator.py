@@ -2,14 +2,14 @@
 Submodule for enumerating subgroup and supergroup maps.
 """
 
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from typing import Protocol, runtime_checkable
 
 from cfa_subgroup_imputer.variables import Range
 
 
 @runtime_checkable
-class Attributor(Protocol):
+class Enumerator(Protocol):
     """
     A class that assists in making sub to supergroup maps for an underlying
     axis defined by a continuous variable, such as age.
@@ -19,7 +19,7 @@ class Attributor(Protocol):
     """
 
     def attribute(
-        self, supergroups: Iterable[str], subgroups: Iterable[str]
+        self, supergroups: Iterable[str], subgroups: Iterable[str], **kwargs
     ) -> dict[str, str]:
         """
         Takes flat supergroup and subgroup inputs, returns a sub : super
@@ -28,7 +28,7 @@ class Attributor(Protocol):
         ...
 
 
-class AgeGroupAttributor(Attributor):
+class AgeGroupEnumerator:
     """
     A class for enumerating age groups.
     """
@@ -38,12 +38,30 @@ class AgeGroupAttributor(Attributor):
     STR_TO_YEARS: dict[str, Range] = {}
 
     def attribute(
-        self, supergroups: Iterable[str], subgroups: Iterable[str]
+        self, supergroups: Iterable[str], subgroups: Iterable[str], **kwargs
     ) -> dict[str, str]:
+        missing_supergroups = self.find_missing(supergroups, subgroups)
+        missing_option = kwargs.get("missing_option", "error")
+        if len(missing_supergroups) > 0:
+            if missing_option == "add":
+                raise NotImplementedError()
+            else:
+                raise RuntimeError(
+                    f"Subgroups {missing_supergroups} have no corresponding supergroups in {supergroups}"
+                )
+
+        raise NotImplementedError()
+
+    def find_missing(
+        self, supergroups: Iterable[str], subgroups: Iterable[str]
+    ) -> Collection[str]:
+        """
+        Returns list of subgroups without supergroups. Empty if all are enumerated.
+        """
         raise NotImplementedError()
 
 
-class CartesianAttributor(Attributor):
+class CartesianEnumerator:
     """
     A class for enumerating super and subgroup Cartesian combinations.
 
@@ -54,7 +72,7 @@ class CartesianAttributor(Attributor):
     """
 
     def attribute(
-        self, supergroups: Iterable[str], subgroups: Iterable[str]
+        self, supergroups: Iterable[str], subgroups: Iterable[str], **kwargs
     ) -> dict[str, str]:
         raise NotImplementedError()
 

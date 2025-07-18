@@ -3,14 +3,14 @@ Submodule for broad-sense handling of supergroups and subgroups.
 """
 
 from collections.abc import Iterable
-from typing import Any, Literal, Self, get_args
+from typing import Hashable, Literal, Self, get_args
 
 import polars as pl
 
 from cfa_subgroup_imputer.variables import (
+    Attribute,
     DensityMeasurementType,
-    GroupingVariable,
-    ImputableMeasurement,
+    ImputableAttribute,
 )
 
 GroupType = Literal["supergroup", "subgroup"]
@@ -23,17 +23,15 @@ class Group:
 
     def __init__(
         self,
-        name: str,
-        group_vartype: GroupingVariable,
-        measurements: Iterable[ImputableMeasurement] = [],
-        properties: Iterable[tuple[str, Any]] = [],
+        name: Hashable,
+        attributes: Iterable[Attribute] = [],
     ):
         """
         Group constructor
 
         Parameters
         ----------
-        name : str
+        name : Hashable
             The name defining the group.
         group_vartype: float
             The size of the group, e.g. number of people in it.
@@ -47,88 +45,83 @@ class Group:
             Optional values that can be imputed from supergroups to subgroups (and back).
         """
         self.name = name
-        self.group_vartype = group_vartype
-        self.measurements = tuple(measurements)
-        self.properties = tuple(properties)
+        self.attributes = tuple(attributes)
         self._validate()
 
-    def _copy_except_measurements(
-        self, measurements: Iterable[ImputableMeasurement]
-    ) -> Self:
-        return type(self)(
-            name=self.name,
-            group_vartype=self.group_vartype,
-            measurements=measurements,
-            properties=self.properties,
-        )
-
     def _validate(self):
-        assert all(
-            [isinstance(m, ImputableMeasurement) for m in self.measurements]
-        ), "All measurements must be ImputableMeasurements"
-        measurement_names = [m.name for m in self.measurements]
+        assert all([isinstance(a, Attribute) for a in self.attributes]), (
+            "All attributes must be of class Attribute"
+        )
+        measurement_names = [a.name for a in self.attributes]
         assert len(set(measurement_names)) == len(measurement_names), (
             "Found multiple measurements for same variable."
         )
-        # TODO: validate properties?
+        to_impute = set(
+            a.name for a in self.attributes if a.impute_action == "impute"
+        )
+        imputable = set(
+            a.name
+            for a in self.attributes
+            if isinstance(a, ImputableAttribute)
+        )
+        assert to_impute.issubset(imputable), (
+            f"The following attributes are requested to be imputed but are not imputable: {to_impute.difference(imputable)}"
+        )
 
-    def add_measurement(self, measurement: ImputableMeasurement) -> Self:
+    def add_attribute(self, attribute: Attribute) -> Self:
         """
         Give this group a new measurement.
         """
-        assert measurement.name not in [m.name for m in self.measurements], (
-            f"Cannot add measurement {measurement} to group {self.name} which already has {self.get_measurement(measurement.name)}"
+        assert attribute.name not in [a.name for a in self.attributes], (
+            f"Cannot add measurement {attribute} to group {self.name} which already has {self.get_attribute(attribute.name)}"
         )
-        return self._copy_except_measurements(
-            self.measurements + (measurement,)
-        )
-
-    def scale_measurements(self, val: float) -> Self:
-        """
-        Scale all group's measurements by a constant.
-        """
-        return self._copy_except_measurements(
-            [m * val for m in self.measurements]
+        return type(self)(
+            name=self.name, attributes=self.attributes + (attribute,)
         )
 
-    def density_to_mass(self, size_from: str = "size") -> Self:
+    def density_to_mass(self, size_from: Hashable = "size") -> Self:
         """
         Make all measurements masses.
         """
-        assert self.measurements is not None, (
-            f"Cannot convert densities to masses for group {self.name} which has no measurements."
-        )
-        size = self.get_measurement(size_from).value
-        measurements = [
-            m.to_mass(size)
-            if m.type in get_args(DensityMeasurementType)
-            else m
-            for m in self.measurements
-        ]
-        return self._copy_except_measurements(measurements)
 
-    def get_measurement(self, name: str) -> ImputableMeasurement:
+        size = self.get_attribute(size_from).value
+        assert isinstance(size, float)
+        assert size > 0
+        attributes = [
+            a.to_mass(size)
+            if a.impute_action == "impute"
+            and isinstance(a, ImputableAttribute)
+            and a.measurement_type in get_args(DensityMeasurementType)
+            else a
+            for a in self.attributes
+        ]
+        return type(self)(name=self.name, attributes=attributes)
+
+    def get_attribute(self, name: Hashable) -> Attribute:
         """
         Retrieve stated measurement.
         """
-        assert name in self.measurements, (
-            f"Group {self.name} has no measurement {name}"
+        assert name in self.attributes, (
+            f"Group {self.name} has no attribute {name}"
         )
-        return [m for m in self.measurements if m.name == name][0]
+        return [a for a in self.attributes if a.name == name][0]
 
-    def restore_densities(self, size_from: str = "size") -> Self:
+    def restore_densities(self, size_from: Hashable = "size") -> Self:
         """
         Undo density_to_mass().
         """
-        assert self.measurements is not None, (
-            f"Cannot convert masses to densities for group {self.name} which has no measurements."
-        )
-        size = self.get_measurement(size_from).value
-        measurements = [
-            m.to_density(size) if m.name == "density_from_mass" else m
-            for m in self.measurements
+        size = self.get_attribute(size_from).value
+        assert isinstance(size, float)
+        assert size > 0
+        attributes = [
+            a.to_density(size)
+            if a.impute_action == "impute"
+            and isinstance(a, ImputableAttribute)
+            and a.measurement_type == "mass_from_density"
+            else a
+            for a in self.attributes
         ]
-        return self._copy_except_measurements(measurements)
+        return type(self)(name=self.name, attributes=attributes)
 
 
 class GroupMap:

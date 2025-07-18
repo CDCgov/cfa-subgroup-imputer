@@ -2,7 +2,7 @@
 Submodule for handling variables, whether measurements or quantities used to define subgroups.
 """
 
-from typing import Literal, NamedTuple, Self
+from typing import Any, Hashable, Literal, NamedTuple, Self, get_args
 
 MassMeasurementType = Literal["mass", "mass_from_density"]
 DensityMeasurementType = Literal["density", "density_from_mass"]
@@ -16,36 +16,106 @@ Mass-like behavior are things like counts, while density-like measurements are
 things like rates or proportions.
 """
 
+ImputeAction = Literal["impute", "copy", "ignore"]
+"""
+What should be done with this value when disaggregating?
+- "impute" means the value will be imputed (must be )
+- "copy" means the value from the supergroup will be copied to all subgroups
+- "ignore" means this value is not propagated from supergroups to subgroups
+"""
 
-class ImputableMeasurement(NamedTuple):
+
+class Attribute:
     """
-    A class for a measurement we can impute from supergroups to subgroups.
-
-    Parameters
-    ----------
-    value : float
-        The value, e.g. a number of cases.
-    name : str
-        What is this a measurement of?
-    type: MeasurementType
-        What kind of measurement is this?
+    A class for data we can associate with a subgroup.
     """
 
-    value: float
-    name: str
-    type: MeasurementType
+    def __init__(
+        self,
+        value: Any,
+        name: Hashable,
+        impute_action: ImputeAction,
+    ):
+        """
+        Attribute constructor.
+
+        Parameters
+        ----------
+        value : Any
+            The value of the variable.
+        name : Hashable
+            What is this variable? E.g., "size" or "vaccination rate"
+        impute_action: ImputeAction
+            What should we do with this measurement when disaggregating?
+            Note that just because we can impute it doesn't mean we will.
+        """
+        self.value = value
+        self.name: Hashable = name
+        self.impute_action: ImputeAction = impute_action
+        self._validate()
+
+    def _validate(self):
+        # Can't impute the base class
+        assert self.impute_action in ["copy", "ignore"]
+
+
+class ImputableAttribute(Attribute):
+    """
+    A class for data we can associate with a subgroup and which can be imputed to subgroups.
+    """
+
+    def __init__(
+        self,
+        value: float,
+        name: Hashable,
+        impute_action: ImputeAction,
+        measurement_type: MeasurementType,
+    ):
+        """
+        ImputableAttribute constructor.
+
+        Parameters
+        ----------
+        value : float
+            The value, e.g. a number of cases.
+        name : Hashable
+            What is this variable? E.g., "size" or "vaccination rate"
+        impute_action: ImputeAction
+            What should we do with this measurement when disaggregating?
+            Note that just because we can impute it doesn't mean we will.
+        type: MeasurementType
+            What kind of imputable attribute is this?
+        """
+        assert value >= 0.0
+        super().__init__(value, name, impute_action)
+        self.measurement_type: MeasurementType = measurement_type
+        assert self.measurement_type in get_args(MeasurementType)
+
+    def _validate(self):
+        assert self.impute_action in get_args(ImputeAction)
 
     def __mul__(self, k: float) -> Self:
-        return type(self)(value=self.value * k, name=self.name, type=self.type)
+        return type(self)(
+            value=self.value * k,
+            name=self.name,
+            impute_action=self.impute_action,
+            measurement_type=self.measurement_type,
+        )
 
     def to_mass(self, volume: float) -> Self:
         return type(self)(
-            value=self.value * volume, name=self.name, type="mass_from_density"
+            value=self.value * volume,
+            name=self.name,
+            impute_action=self.impute_action,
+            measurement_type="mass_from_density",
         )
 
     def to_density(self, volume: float) -> Self:
         return type(self)(
-            value=self.value / volume, name=self.name, type="density_from_mass"
+            value=self.value / volume,
+            name=self.name,
+            impute_action=self.impute_action,
+            measurement_type="density_from_mass",
         )
 
 

@@ -2,35 +2,32 @@
 Module for imputation machinery.
 """
 
-from typing import Protocol, get_args
+from typing import Protocol
 
 from cfa_subgroup_imputer.groups import (
     Group,
     GroupMap,
 )
-from cfa_subgroup_imputer.variables import MassMeasurementType
 
 
-class WeightCalculator(Protocol):
+class ProportionCalculator(Protocol):
     def calculate(self, supergroup_name: str) -> dict[str, float]: ...
 
 
-class CategoricalWeights(WeightCalculator):
-    def __init__(self, weight_from: str):
-        self.varname = weight_from
+class ProportionsFromCategories:
+    def __init__(self, proportions_from: str):
+        self.varname = proportions_from
 
-    def weight(self, group: Group):
-        weight = group.get_measurement(self.varname)
-        assert weight.type in get_args(MassMeasurementType), (
-            "Weight must derive from a mass measurement."
-        )
-        return weight.value
+    def relative_proportion(self, group: Group):
+        rel_prop = group.get_attribute(self.varname)
+        assert rel_prop.value >= 0.0
+        return rel_prop.value
 
     def calculate(self, supergroup_name: str) -> dict[str, float]:
         raise NotImplementedError()
 
 
-class ContinuousWeights(WeightCalculator):
+class ProportionsFromContinuous:
     def calculate(self, supergroup_name: str) -> dict[str, float]:
         raise NotImplementedError()
 
@@ -40,7 +37,7 @@ class Disaggregator:
     A class which imputes and disaggregates subgroups.
     """
 
-    def __init__(self, weight_calculator: WeightCalculator):
+    def __init__(self, weight_calculator: ProportionCalculator):
         self.weight_calculator = weight_calculator
 
     def __call__(self, map: GroupMap) -> GroupMap:

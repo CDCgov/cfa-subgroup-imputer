@@ -6,25 +6,17 @@ from collections.abc import Collection
 
 import polars as pl
 
-from cfa_subgroup_imputer.attributor import CartesianAttributor
+from cfa_subgroup_imputer.enumerator import CartesianEnumerator
 from cfa_subgroup_imputer.groups import Group, GroupMap
 from cfa_subgroup_imputer.imputer import (
-    CategoricalWeights,
-    ContinuousWeights,
     Disaggregator,
+    ProportionsFromCategories,
+    ProportionsFromContinuous,
 )
 from cfa_subgroup_imputer.variables import (
     GroupableTypes,
     GroupingVariable,
 )
-
-
-def get_attributor():
-    raise NotImplementedError()
-
-
-def get_weight():
-    raise NotImplementedError()
 
 
 def attribute_subgroups(
@@ -38,7 +30,7 @@ def attribute_subgroups(
     supergroups = supergroup_df[supergroup_col].unique().to_list()
     subgroups = subgroup_df[subgroup_col].unique().to_list()
     if group_vartype.type == "Categorical":
-        return CartesianAttributor().attribute(
+        return CartesianEnumerator().attribute(
             supergroups=supergroups, subgroups=subgroups
         )
     elif group_vartype.type == "Continuous":
@@ -126,7 +118,7 @@ def _disaggregate(
     Internal disaggregation function for processed inputs.
     """
     all_groups = [
-        Group(name=group_name, group_vartype=group_vartype)
+        Group(name=group_name)
         for group_name in list(set(subgroup_to_supergroup.values()))
         + list(subgroup_to_supergroup.keys())
     ]
@@ -136,8 +128,8 @@ def _disaggregate(
     map.add_data_from_polars(subgroup_df)
 
     weight_calculator = (
-        CategoricalWeights(group_vartype.name)
+        ProportionsFromCategories(group_vartype.name)
         if group_vartype.type == "Categorical"
-        else ContinuousWeights()
+        else ProportionsFromContinuous()
     )
     return Disaggregator(weight_calculator)(map).data_to_polars("subgroup")
