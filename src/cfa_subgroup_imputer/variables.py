@@ -119,7 +119,7 @@ class ImputableAttribute(Attribute):
         )
 
 
-class Range(NamedTuple):
+class Range:
     """
     A slice of a one-dimensional variable. e.g. [0, 3.14159).
 
@@ -135,10 +135,32 @@ class Range(NamedTuple):
         Is the range inclusive of the upper value?
     """
 
-    lower: float
-    lower_included: bool
-    upper: float
-    upper_included: bool
+    def __init__(
+        self,
+        lower: float,
+        upper: float,
+    ):
+        self.lower: float = lower
+        self.upper: float = upper
+
+    def __contains__(self, x: Self):
+        return x.lower >= self.lower and x.upper <= self.upper
+
+    def __gt__(self, x: Self):
+        return self.lower >= x.upper
+
+    def __lt__(self, x: Self):
+        return self.upper <= x.lower
+
+    def __eq__(self, x: Self):
+        return self.lower == x.lower and self.upper == x.upper
+
+    @classmethod
+    def from_tuple(cls, low_high: tuple[float, float]):
+        return cls(low_high[0], low_high[1])
+
+    def to_tuple(self) -> tuple[float, float]:
+        return (self.lower, self.upper)
 
 
 GroupableTypes = Literal["Categorical", "Continuous"]
