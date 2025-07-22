@@ -7,7 +7,8 @@ from collections.abc import Callable, Iterable
 from math import inf
 from typing import Hashable, Protocol, runtime_checkable
 
-from cfa_subgroup_imputer.variables import Range
+from cfa_subgroup_imputer.groups import Group, GroupMap
+from cfa_subgroup_imputer.variables import Attribute, Range
 
 
 @runtime_checkable
@@ -103,9 +104,16 @@ class AgeGroupEnumerator:
         raise RuntimeError(f"Cannot process age range {x}")
 
     def enumerate(
-        self, supergroups: Iterable[str], subgroups: Iterable[str], **kwargs
-    ) -> dict[Hashable, Hashable]:
+        self,
+        supergroups: Iterable[str],
+        subgroups: Iterable[str],
+        **kwargs,
+    ) -> GroupMap:
+        age_varname = kwargs.get("variable_name", "age")
         missing_option = kwargs.get("missing_option", "error")
+
+        groups = self.make_groups(supergroups, subgroups, age_varname)
+
         # Brute force attribution
         super_dict = {grp: self.age_range_from_str(grp) for grp in supergroups}
         sub_to_super = {}
@@ -119,7 +127,7 @@ class AgeGroupEnumerator:
             if len(super) == 1:
                 sub_to_super[sub] = super[0]
             elif len(super) == 0:
-                if missing_option == "add":
+                if missing_option == "add_one_to_one":
                     super_dict[sub] = sub_range
                 else:
                     raise RuntimeError(
@@ -129,7 +137,8 @@ class AgeGroupEnumerator:
                 raise RuntimeError(
                     f"Subgroup {sub} is contained by multiple supergroups: {super}"
                 )
-        return sub_to_super
+
+        return GroupMap(sub_to_super=sub_to_super, groups=groups)
 
     def is_valid_age_group(self, x: str) -> bool:
         try:
@@ -140,6 +149,26 @@ class AgeGroupEnumerator:
                 return False
             else:
                 raise e
+
+    def make_groups(
+        self,
+        supergroups: Iterable[str],
+        subgroups: Iterable[str],
+        age_varname: str,
+    ) -> list[Group]:
+        return [
+            Group(
+                name=grp,
+                attributes=[
+                    Attribute(
+                        value=self.age_range_from_str(grp),
+                        name=age_varname,
+                        impute_action="ignore",
+                    )
+                ],
+            )
+            for grp in list(supergroups) + list(subgroups)
+        ]
 
 
 class CartesianEnumerator:
@@ -157,7 +186,32 @@ class CartesianEnumerator:
     ):
         self.paste_fun = paste_fun
 
+    def make_subgroups(
+        supergroup: str,
+        subgroups: Iterable[str],
+        supergroup_variable: str,
+        subgroup_variable: str,
+    ) -> list[Group]:
+        pass
+
+    def make_supergroups(
+        subgroups: Iterable[str],
+        supergroup_variable: str,
+    ) -> list[Group]:
+        pass
+
     def enumerate(
-        self, supergroups: Iterable[str], subgroups: Iterable[str], **kwargs
+        self,
+        supergroups: Iterable[str],
+        subgroups: Iterable[str],
+        **kwargs,
     ) -> dict[Hashable, Hashable]:
-        raise NotImplementedError()
+        assert False
+        # supergroup_variable: str
+        # subgroup_variable: str
+
+        # groups = (
+        #     make_supergroups(subgroups, supergroup_variable) + make_subgroups()
+        # )
+
+        # raise NotImplementedError()

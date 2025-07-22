@@ -149,6 +149,9 @@ class Range:
     def __gt__(self, x: Self):
         return self.lower >= x.upper
 
+    def __hash__(self):
+        return self.to_tuple().__hash__()
+
     def __lt__(self, x: Self):
         return self.upper <= x.lower
 
