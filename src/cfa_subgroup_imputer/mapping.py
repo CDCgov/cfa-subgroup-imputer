@@ -3,7 +3,7 @@ Submodule for enumerating subgroup and supergroup maps.
 """
 
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from math import inf
 from typing import Hashable, Protocol, runtime_checkable
 
@@ -12,7 +12,17 @@ from cfa_subgroup_imputer.variables import Attribute, Range
 
 
 @runtime_checkable
-class Enumerator(Protocol):
+class HashableCombiner(Protocol):
+    def combine(self, *args) -> Hashable: ...
+
+
+class StringPaster:
+    def combine(self, *args) -> Hashable:
+        return "_".join(str(arg) for arg in args)
+
+
+@runtime_checkable
+class Mapper(Protocol):
     """
     A class that assists in making sub to supergroup maps for an underlying
     axis defined by a continuous variable, such as age.
@@ -21,9 +31,9 @@ class Enumerator(Protocol):
     supergroups are..." to a sub : super group name/string dict.
     """
 
-    def enumerate(
+    def construct_group_map(
         self, supergroups: Iterable[str], subgroups: Iterable[str], **kwargs
-    ) -> dict[Hashable, Hashable]:
+    ) -> GroupMap:
         """
         Takes flat supergroup and subgroup inputs, returns a sub : super
         group map which can be fed to a GroupMap.
@@ -31,9 +41,13 @@ class Enumerator(Protocol):
         ...
 
 
-class AgeGroupEnumerator:
+class AgeGroupHandler:
     """
-    A class for enumerating age groups.
+    A class for working with age groups.
+
+    Implements:
+        cfa_subgroup_imputer.enumerator.Mapper
+        cfa_subgroup_imputer.polars.FilterConstructor
     """
 
     STR_AGE_RANGE_CONVERTERS = (
@@ -95,7 +109,7 @@ class AgeGroupEnumerator:
         """
         Takes string defining age group and returns a (low, high,) float defining the range in years.
         """
-        for sarc in AgeGroupEnumerator.STR_AGE_RANGE_CONVERTERS:
+        for sarc in AgeGroupHandler.STR_AGE_RANGE_CONVERTERS:
             if ages := sarc[0].fullmatch(x):
                 low, high = sarc[1](ages.groups())
                 if high == inf:
@@ -103,7 +117,7 @@ class AgeGroupEnumerator:
                 return Range(low, high)
         raise RuntimeError(f"Cannot process age range {x}")
 
-    def enumerate(
+    def construct_group_map(
         self,
         supergroups: Iterable[str],
         subgroups: Iterable[str],
@@ -171,9 +185,10 @@ class AgeGroupEnumerator:
         ]
 
 
-class CartesianEnumerator:
+class CategoricalSubgroupHandler:
     """
-    A class for enumerating super and subgroup Cartesian combinations.
+    A class for handling subgroups based on a categorical variable, where all subgroups
+    are found in all supergroups.
 
     For example, if we have age-based supergroups [0-17 years, 18-64 years, 65+ years]
     and want [low, moderate, high]-risk subgroups, this class makes and handles
@@ -181,37 +196,76 @@ class CartesianEnumerator:
     and mapping them to the supergroups.
     """
 
-    def __init__(
-        self, paste_fun: Callable = lambda x: str(x[0]) + "_" + str(x[1])
-    ):
-        self.paste_fun = paste_fun
+    def __init__(self, hash_combiner: HashableCombiner = StringPaster()):
+        self.hash_combiner: HashableCombiner = hash_combiner
 
     def make_subgroups(
-        supergroup: str,
-        subgroups: Iterable[str],
-        supergroup_variable: str,
-        subgroup_variable: str,
-    ) -> list[Group]:
-        pass
-
-    def make_supergroups(
-        subgroups: Iterable[str],
-        supergroup_variable: str,
-    ) -> list[Group]:
-        pass
-
-    def enumerate(
         self,
         supergroups: Iterable[str],
         subgroups: Iterable[str],
+        supergroup_varname: str,
+        subgroup_varname: str,
+    ) -> list[Group]:
+        return [
+            Group(
+                name=self.hash_combiner.combine(supergrp, subgrp),
+                attributes=[
+                    Attribute(
+                        value=supergrp,
+                        name=supergroup_varname,
+                        impute_action="ignore",
+                    ),
+                    Attribute(
+                        value=subgrp,
+                        name=subgroup_varname,
+                        impute_action="ignore",
+                    ),
+                ],
+            )
+            for subgrp in list(subgroups)
+            for supergrp in list(supergroups)
+        ]
+
+    def make_supergroups(
+        self,
+        supergroups: Iterable[str],
+        supergroup_varname: str,
+    ) -> list[Group]:
+        return [
+            Group(
+                name=grp,
+                attributes=[
+                    Attribute(
+                        value=grp,
+                        name=supergroup_varname,
+                        impute_action="ignore",
+                    )
+                ],
+            )
+            for grp in list(supergroups)
+        ]
+
+    def construct_group_map(
+        self,
+        supergroups: Iterable[str],
+        subgroups: Iterable[str],
+        supergroup_varname: str,
+        subgroup_varname: str,
         **kwargs,
-    ) -> dict[Hashable, Hashable]:
-        assert False
-        # supergroup_variable: str
-        # subgroup_variable: str
+    ) -> GroupMap:
+        groups = self.make_supergroups(
+            supergroups, supergroup_varname
+        ) + self.make_subgroups(
+            supergroups, subgroups, supergroup_varname, subgroup_varname
+        )
 
-        # groups = (
-        #     make_supergroups(subgroups, supergroup_variable) + make_subgroups()
-        # )
+        sub_to_super = {
+            self.hash_combiner.combine(
+                subgrp,
+                supergrp,
+            ): supergrp
+            for subgrp in subgroups
+            for supergrp in supergroups
+        }
 
-        # raise NotImplementedError()
+        return GroupMap(sub_to_super, groups)

@@ -2,7 +2,7 @@
 Submodule for broad-sense handling of supergroups and subgroups.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Hashable, Literal, Self, get_args
 
 import polars as pl
@@ -47,6 +47,20 @@ class Group:
         self.name = name
         self.attributes = tuple(attributes)
         self._validate()
+
+    def __eq__(self, x: Self):
+        if self.name != x.name:
+            return False
+
+        my_attr = set(a.name for a in self.attributes)
+        their_attr = set(a.name for a in self.attributes)
+
+        if not my_attr.difference(their_attr) == set():
+            return False
+
+        return all(
+            self.get_attribute(a) == x.get_attribute(a) for a in my_attr
+        )
 
     def _validate(self):
         assert all([isinstance(a, Attribute) for a in self.attributes]), (
@@ -129,7 +143,11 @@ class GroupMap:
     A class that binds supergroups and subgroups together, primarily serving to validate inputs.
     """
 
-    def __init__(self, sub_to_super: dict[str, str], groups: Iterable[Group]):
+    def __init__(
+        self,
+        sub_to_super: Mapping[Hashable, Hashable],
+        groups: Iterable[Group],
+    ):
         """
         Default constructor, takes in a subgroup : supergroup dict.
         """
@@ -141,7 +159,9 @@ class GroupMap:
 
     @classmethod
     def from_supergroups(
-        cls, super_to_sub: dict[str, Iterable[str]], groups: Iterable[Group]
+        cls,
+        super_to_sub: dict[Hashable, Iterable[Hashable]],
+        groups: Iterable[Group],
     ) -> Self:
         """
         Alternative constructor, takes in a supergroup : [subgroups] dict.
@@ -222,8 +242,8 @@ class GroupMap:
 
     @staticmethod
     def make_many_to_one(
-        super_to_sub: dict[str, Iterable[str]],
-    ) -> dict[str, str]:
+        super_to_sub: Mapping[Hashable, Iterable[Hashable]],
+    ) -> Mapping[Hashable, Hashable]:
         """
         Inverts a supergroup : [subgroups] one to one dict to a subgroup : supergroup one to many dict
         """
@@ -231,8 +251,8 @@ class GroupMap:
 
     @staticmethod
     def make_one_to_many(
-        sub_to_super: dict[str, str],
-    ) -> dict[str, list[str]]:
+        sub_to_super: Mapping[Hashable, Hashable],
+    ) -> Mapping[Hashable, list[Hashable]]:
         """
         Inverts a subgroup : supergroup one to one dict to a supergroup : [subgroups] one to many dict
         """
@@ -244,14 +264,14 @@ class GroupMap:
                 super_to_sub[v] = [k]
         return super_to_sub
 
-    def subgroups(self, name: str) -> list[str]:
+    def subgroups(self, name: Hashable) -> list[Hashable]:
         assert name in self.super_to_sub.keys()
         return self.super_to_sub[name]
 
-    def supergroup(self, name: str) -> str:
+    def supergroup(self, name: Hashable) -> Hashable:
         assert name in self.sub_to_super.keys()
         return self.sub_to_super[name]
 
     @property
-    def supergroups(self) -> list[str]:
+    def supergroups(self) -> list[Hashable]:
         return list(self.super_to_sub.keys())

@@ -54,7 +54,15 @@ class Attribute:
         self.impute_action: ImputeAction = impute_action
         self._validate()
 
+    def __eq__(self, x):
+        return (
+            self.name == x.name
+            and self.value == x.value
+            and self.impute_action == x.impute_action
+        )
+
     def _validate(self):
+        assert isinstance(self.name, Hashable)
         # Can't impute the base class
         assert self.impute_action in ["copy", "ignore"]
 
@@ -93,6 +101,9 @@ class ImputableAttribute(Attribute):
 
     def _validate(self):
         assert self.impute_action in get_args(ImputeAction)
+
+    def __eq__(self, x):
+        return super().__eq__() and self.measurement_type == x.measurement_type
 
     def __mul__(self, k: float) -> Self:
         return type(self)(

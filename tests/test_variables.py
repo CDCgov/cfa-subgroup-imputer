@@ -1,4 +1,20 @@
-from cfa_subgroup_imputer.variables import Range
+import pytest
+
+from cfa_subgroup_imputer.variables import Attribute, Range
+
+
+class TestAttribute:
+    def test_constructor(self):
+        _ = Attribute(
+            name="Outis", value=[dict(), tuple(), ""], impute_action="copy"
+        )
+
+        _ = Attribute(name="Outis", value=None, impute_action="ignore")
+
+        with pytest.raises(Exception):
+            _ = Attribute(
+                name="Outis", value=[], impute_action="invalid option"
+            )
 
 
 def test_range():
