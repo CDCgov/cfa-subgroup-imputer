@@ -79,7 +79,7 @@ class Group:
             name=self.name, attributes=self.attributes + (attribute,)
         )
 
-    def density_to_mass(self, size_from: Hashable = "size") -> Self:
+    def rate_to_count(self, size_from: Hashable = "size") -> Self:
         """
         Make all measurements masses.
         """
@@ -88,7 +88,7 @@ class Group:
         assert isinstance(size, float)
         assert size > 0
         attributes = [
-            a.to_mass(size)
+            a.to_count(size)
             if a.impute_action == "impute"
             and isinstance(a, ImputableAttribute)
             and a.measurement_type in get_args(DensityMeasurementType)
@@ -106,7 +106,7 @@ class Group:
         )
         return [a for a in self.attributes if a.name == name][0]
 
-    def restore_densities(self, size_from: Hashable = "size") -> Self:
+    def restore_rates(self, size_from: Hashable = "size") -> Self:
         """
         Undo density_to_mass().
         """
@@ -114,7 +114,7 @@ class Group:
         assert isinstance(size, float)
         assert size > 0
         attributes = [
-            a.to_density(size)
+            a.to_rate(size)
             if a.impute_action == "impute"
             and isinstance(a, ImputableAttribute)
             and a.measurement_type == "mass_from_density"

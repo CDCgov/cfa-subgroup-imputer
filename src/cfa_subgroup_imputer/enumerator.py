@@ -75,13 +75,3 @@ class CartesianEnumerator:
         self, supergroups: Iterable[str], subgroups: Iterable[str], **kwargs
     ) -> dict[str, str]:
         raise NotImplementedError()
-
-
-class Aligner:
-    """
-    A class that takes in multiple sets of supergroups and defines the largest
-    common denominator set of subgroups which allow things to be aligned among
-    the groups.
-    """
-
-    pass

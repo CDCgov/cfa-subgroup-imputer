@@ -102,15 +102,15 @@ class ImputableAttribute(Attribute):
             measurement_type=self.measurement_type,
         )
 
-    def to_mass(self, volume: float) -> Self:
+    def to_count(self, size: float) -> Self:
         return type(self)(
-            value=self.value * volume,
+            value=self.value * size,
             name=self.name,
             impute_action=self.impute_action,
             measurement_type="mass_from_density",
         )
 
-    def to_density(self, volume: float) -> Self:
+    def to_rate(self, volume: float) -> Self:
         return type(self)(
             value=self.value / volume,
             name=self.name,
