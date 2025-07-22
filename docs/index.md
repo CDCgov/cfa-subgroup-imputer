@@ -61,7 +61,7 @@ Quantities that fall into this category are:
 - Hospitalization, infection, or case counts.
 - Counts of vaccinated individuals.
 
-A rate-like attribute can be disaggregated if the size of the group is available.
+A rate-like attribute refers to a _per-capita_ rate, and as such it can be disaggregated if the size of the group is available.
 Then, rate-like attributes are first transformed into count-like measurements by scaling by the appropriate variable in the supergroup (usually, supergroup size), splitting that quantity proportionately, and finally re-scaling by the variable's value in the subgroup.
 Quantities that fall into this category are:
 - Per-capita hospitalization, infection, or case rates.
