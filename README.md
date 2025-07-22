@@ -9,6 +9,11 @@ This repo contains a python package for imputing values in subgroups from values
 ## Getting started
 
 This is a [uv project](https://docs.astral.sh/uv/guides/projects/).
+Eventually, there will be two ways to use this codebase.
+- A command-line interface via `uv run python -m cfa_subgroup_imputer [options]`
+- A python package available for `import`ing in python scripts.
+
+Documentation can be read in the `/docs` folder or built via `uv run mkdocs serve`.
 
 ## Project admins
 
