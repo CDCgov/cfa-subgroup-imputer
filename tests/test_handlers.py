@@ -1,6 +1,12 @@
 import math
 
-from cfa_subgroup_imputer.mapping import AgeGroupHandler
+# from cfa_subgroup_imputer.groups import Group
+from cfa_subgroup_imputer.mapping import (
+    AgeGroupHandler,
+    # CategoricalSubgroupHandler,
+)
+
+# from cfa_subgroup_imputer.variables import Attribute
 
 
 class TestAgeGroups:
@@ -47,7 +53,7 @@ class TestAgeGroups:
 
 
 # class TestCategoroical:
-#     def test_constructor():
+#     def test_constructor(self):
 #         supergroups = ["festina", "festimus materia"]
 #         subgroups = ["lente", "velociter"]
 
@@ -59,10 +65,99 @@ class TestAgeGroups:
 #         }
 
 #         groups_expected = {
-#             "lente": Group(name="lente", attributes = []),
-#             "velociter":,
-#             "festina_lente": Group(name=),
-#             "festina_velociter": ,
-#             "festimus materia_lente": ,
-#             "festimus materia_velociter": ,
+#             "festina": Group(
+#                 name="festina",
+#                 attributes=[
+#                     Attribute(
+#                         value="festina",
+#                         name="phrase",
+#                         impute_action="ignore",
+#                     ),
+#                 ],
+#             ),
+#             "festimus materia": Group(
+#                 name="festimus materia",
+#                 attributes=[
+#                     Attribute(
+#                         value="festimus materia",
+#                         name="phrase",
+#                         impute_action="ignore",
+#                     ),
+#                 ],
+#             ),
+#             "festina_lente": Group(
+#                 name="festina_lente",
+#                 attributes=[
+#                     Attribute(
+#                         value="lente",
+#                         name="speed",
+#                         impute_action="ignore",
+#                     ),
+#                     Attribute(
+#                         value="festina",
+#                         name="phrase",
+#                         impute_action="ignore",
+#                     ),
+#                 ],
+#             ),
+#             "festina_velociter": Group(
+#                 name="festina_velociter",
+#                 attributes=[
+#                     Attribute(
+#                         value="velociter",
+#                         name="speed",
+#                         impute_action="ignore",
+#                     ),
+#                     Attribute(
+#                         value="festina",
+#                         name="phrase",
+#                         impute_action="ignore",
+#                     ),
+#                 ],
+#             ),
+#             "festimus materia_lente": Group(
+#                 name="festimus materia_lente",
+#                 attributes=[
+#                     Attribute(
+#                         value="lente",
+#                         name="speed",
+#                         impute_action="ignore",
+#                     ),
+#                     Attribute(
+#                         value="festimus materia",
+#                         name="phrase",
+#                         impute_action="ignore",
+#                     ),
+#                 ],
+#             ),
+#             "festimus materia_velociter": Group(
+#                 name="festimus materia_velociter",
+#                 attributes=[
+#                     Attribute(
+#                         value="velociter",
+#                         name="speed",
+#                         impute_action="ignore",
+#                     ),
+#                     Attribute(
+#                         value="festimus materia",
+#                         name="phrase",
+#                         impute_action="ignore",
+#                     ),
+#                 ],
+#             ),
 #         }
+
+#         gmap = CategoricalSubgroupHandler().construct_group_map(
+#             supergroups=supergroups,
+#             subgroups=subgroups,
+#             supergroup_varname="phrase",
+#             subgroup_varname="speed",
+#         )
+
+#         # assert groups_expected["festina"] == groups_expected["festina"]
+
+#         # for k, v in gmap.groups.items():
+#         #     print(f"{k} : {v}\n")
+
+#         # assert False
+#         # assert gmap.groups == groups_expected

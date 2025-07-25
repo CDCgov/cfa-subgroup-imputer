@@ -61,6 +61,9 @@ class Attribute:
             and self.impute_action == x.impute_action
         )
 
+    def __repr__(self):
+        return f"Attribute(name={self.name}, impute_action={self.impute_action}, value={self.value})"
+
     def _validate(self):
         assert isinstance(self.name, Hashable)
         # Can't impute the base class

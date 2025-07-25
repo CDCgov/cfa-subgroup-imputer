@@ -16,6 +16,13 @@ class TestAttribute:
                 name="Outis", value=[], impute_action="invalid option"
             )
 
+    def test_eq(self):
+        assert Attribute(
+            name="Outis", value=[dict(), tuple(), ""], impute_action="copy"
+        ) == Attribute(
+            name="Outis", value=[dict(), tuple(), ""], impute_action="copy"
+        )
+
 
 def test_range():
     one_ten = Range(1, 10)
