@@ -136,6 +136,14 @@ class AgeGroupHandler:
                 return Range(low, high)
         raise RuntimeError(f"Cannot process age range {x}")
 
+    def age_ranges_equivalent(self, x: str, y: str) -> bool:
+        """
+        True if the age ranges encode the same values, else False.
+
+        E.g., 1-3 years and 1-<4 years imply age group of 1, 2, and 3 year olds.
+        """
+        return self.age_range_from_str(x) == self.age_range_from_str(y)
+
     def construct_group_map(
         self,
         supergroups: Iterable[str],
@@ -149,7 +157,6 @@ class AgeGroupHandler:
 
         # Brute force attribution
         super_dict = {grp: self.age_range_from_str(grp) for grp in supergroups}
-        print(super_dict)
         sub_to_super = {}
         for sub in subgroups:
             sub_range = self.age_range_from_str(sub)

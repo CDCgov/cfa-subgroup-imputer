@@ -7,7 +7,7 @@ from cfa_subgroup_imputer.mapping import (
     AgeGroupHandler,
     CategoricalSubgroupHandler,
 )
-from cfa_subgroup_imputer.variables import Attribute
+from cfa_subgroup_imputer.variables import Attribute, Range
 
 
 class TestAgeGroups:
@@ -68,12 +68,64 @@ class TestAgeGroups:
 
     def test_constructor(self):
         supergroups = ["0 years", "1-<2 years"]
-        subgroups = ["0-<6 months", "6 months-<1 year", "1 years"]
-        AgeGroupHandler().construct_group_map(
+        subgroups = ["0-<6 months", "6 months-<1 year", "1 year"]
+        group_map = AgeGroupHandler().construct_group_map(
             supergroups=supergroups, subgroups=subgroups
         )
-        # groups_expected = {}
-        # map_expected = {}
+        groups_expected = {
+            "0 years": Group(
+                name="0 years",
+                attributes=[
+                    Attribute(
+                        name="age", value=Range(0, 1), impute_action="ignore"
+                    )
+                ],
+            ),
+            "1-<2 years": Group(
+                name="1-<2 years",
+                attributes=[
+                    Attribute(
+                        name="age", value=Range(1, 2), impute_action="ignore"
+                    )
+                ],
+            ),
+            "0-<6 months": Group(
+                name="0-<6 months",
+                attributes=[
+                    Attribute(
+                        name="age",
+                        value=Range(0, 6.0 / 12.0),
+                        impute_action="ignore",
+                    )
+                ],
+            ),
+            "6 months-<1 year": Group(
+                name="6 months-<1 year",
+                attributes=[
+                    Attribute(
+                        name="age",
+                        value=Range(6.0 / 12.0, 1.0),
+                        impute_action="ignore",
+                    )
+                ],
+            ),
+            "1 year": Group(
+                name="1 year",
+                attributes=[
+                    Attribute(
+                        name="age", value=Range(1, 2), impute_action="ignore"
+                    )
+                ],
+            ),
+        }
+        map_expected = {
+            "0-<6 months": "0 years",
+            "6 months-<1 year": "0 years",
+            "1 year": "1-<2 years",
+        }
+
+        assert group_map.groups == groups_expected
+        assert group_map.sub_to_super == map_expected
 
         # Subgroup missing supergroup
         with pytest.raises(Exception):
@@ -192,16 +244,12 @@ class TestCategoroical:
             ),
         }
 
-        gmap = CategoricalSubgroupHandler().construct_group_map(
+        group_map = CategoricalSubgroupHandler().construct_group_map(
             supergroups=supergroups,
             subgroups=subgroups,
             supergroup_varname="phrase",
             subgroup_varname="speed",
         )
 
-        assert gmap.groups == groups_expected
-        print(">>>>>> map_expected <<<<<<")
-        print(map_expected)
-        print(">>>>>> gmap.sub_to_super <<<<<<")
-        print(gmap.sub_to_super)
-        assert gmap.sub_to_super == map_expected
+        assert group_map.groups == groups_expected
+        assert group_map.sub_to_super == map_expected
