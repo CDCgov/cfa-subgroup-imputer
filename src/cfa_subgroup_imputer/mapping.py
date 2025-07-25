@@ -261,8 +261,8 @@ class CategoricalSubgroupHandler:
 
         sub_to_super = {
             self.hash_combiner.combine(
-                subgrp,
                 supergrp,
+                subgrp,
             ): supergrp
             for subgrp in subgroups
             for supergrp in supergroups
