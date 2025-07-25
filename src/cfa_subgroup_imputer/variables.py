@@ -2,7 +2,15 @@
 Submodule for handling variables, whether measurements or quantities used to define subgroups.
 """
 
-from typing import Any, Hashable, Literal, NamedTuple, Self, get_args
+from collections.abc import Iterable
+from typing import (
+    Any,
+    Hashable,
+    Literal,
+    NamedTuple,
+    Self,
+    get_args,
+)
 
 MassMeasurementType = Literal["mass", "mass_from_density"]
 DensityMeasurementType = Literal["density", "density_from_mass"]
@@ -157,6 +165,11 @@ class Range:
         self.lower: float = lower
         self.upper: float = upper
 
+    def __add__(self, x: Self) -> Self:
+        # @TODO: should this be less exact?
+        assert self.upper == x.lower
+        return type(self)(lower=self.lower, upper=x.upper)
+
     def __contains__(self, x: Self):
         return x.lower >= self.lower and x.upper <= self.upper
 
@@ -172,12 +185,34 @@ class Range:
     def __eq__(self, x: Self):
         return self.lower == x.lower and self.upper == x.upper
 
+    def __repr__(self):
+        return f"Range({self.lower},{self.upper})"
+
     @classmethod
     def from_tuple(cls, low_high: tuple[float, float]):
         return cls(low_high[0], low_high[1])
 
     def to_tuple(self) -> tuple[float, float]:
         return (self.lower, self.upper)
+
+
+def assert_range_spanned_exactly(
+    range: Range, ranges: Iterable[Range]
+) -> None:
+    """
+    Checks that the provided `ranges`, in aggregate, span exactly `range`.
+
+    [Range(0., 1.), Range(1., 10.)] span Range(0., 10.)
+    [Range(0., 1.), Range(1., 10.1)] does not span Range(0., 10.)
+    [Range(0., 1.), Range(2., 10.)] does not span Range(0., 10.)
+    """
+    ranges = sorted(ranges)
+    lower = range.lower
+    assert ranges[0].lower == lower
+    cumulative = ranges[0]
+    for r in ranges[1:]:
+        cumulative += r
+    assert cumulative.upper == range.upper
 
 
 GroupableTypes = Literal["Categorical", "Continuous"]

@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from cfa_subgroup_imputer.groups import Group
 from cfa_subgroup_imputer.mapping import (
     AgeGroupHandler,
@@ -25,8 +27,8 @@ class TestAgeGroups:
         )
 
         assert AgeGroupHandler().age_range_from_str("42 years").to_tuple() == (
-            41.0,
             42.0,
+            43.0,
         )
 
         assert AgeGroupHandler().age_range_from_str(
@@ -49,6 +51,50 @@ class TestAgeGroups:
             0.0,
             1.0,
         )
+
+        assert AgeGroupHandler().age_range_from_str(
+            "2-<3 years"
+        ).to_tuple() == (
+            2.0,
+            3.0,
+        )
+
+        assert AgeGroupHandler().age_range_from_str(
+            "1-<3 months"
+        ).to_tuple() == (
+            1.0 / 12.0,
+            3.0 / 12.0,
+        )
+
+    def test_constructor(self):
+        supergroups = ["0 years", "1-<2 years"]
+        subgroups = ["0-<6 months", "6 months-<1 year", "1 years"]
+        AgeGroupHandler().construct_group_map(
+            supergroups=supergroups, subgroups=subgroups
+        )
+        # groups_expected = {}
+        # map_expected = {}
+
+        # Subgroup missing supergroup
+        with pytest.raises(Exception):
+            AgeGroupHandler().construct_group_map(
+                supergroups=supergroups,
+                subgroups=["0-<6 months", "6 months-<1 year", "2 years"],
+            )
+
+        # Supergroup missing subgroup
+        with pytest.raises(Exception):
+            AgeGroupHandler().construct_group_map(
+                supergroups=supergroups,
+                subgroups=["0-<6 months", "2 years"],
+            )
+
+        # Supergroups noncontiguous
+        with pytest.raises(Exception):
+            AgeGroupHandler().construct_group_map(
+                supergroups=["0 years", "2 years"],
+                subgroups=["0 years", "2 years"],
+            )
 
 
 class TestCategoroical:

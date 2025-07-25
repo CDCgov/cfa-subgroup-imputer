@@ -8,7 +8,11 @@ from math import inf
 from typing import Hashable, Protocol, runtime_checkable
 
 from cfa_subgroup_imputer.groups import Group, GroupMap
-from cfa_subgroup_imputer.variables import Attribute, Range
+from cfa_subgroup_imputer.variables import (
+    Attribute,
+    Range,
+    assert_range_spanned_exactly,
+)
 
 
 @runtime_checkable
@@ -41,6 +45,7 @@ class Mapper(Protocol):
         ...
 
 
+# @TODO: Needs more static methods
 class AgeGroupHandler:
     """
     A class for working with age groups.
@@ -54,8 +59,8 @@ class AgeGroupHandler:
         (
             re.compile(r"^(\d+) years*"),
             lambda x: (
-                float(x[0]) - 1.0,
                 float(x[0]),
+                float(x[0]) + 1.0,
             ),
         ),
         (
@@ -87,10 +92,24 @@ class AgeGroupHandler:
             ),
         ),
         (
+            re.compile(r"^(\d+) months*-<(\d+) years*"),
+            lambda x: (
+                float(x[0]) / 12.0,
+                float(x[1]),
+            ),
+        ),
+        (
             re.compile(r"^(\d+)-(\d+) months*"),
             lambda x: (
                 float(x[0]) / 12.0,
                 (float(x[1]) + 1.0) / 12.0,
+            ),
+        ),
+        (
+            re.compile(r"^(\d+)-<(\d+) months*"),
+            lambda x: (
+                float(x[0]) / 12.0,
+                float(x[1]) / 12.0,
             ),
         ),
     )
@@ -130,6 +149,7 @@ class AgeGroupHandler:
 
         # Brute force attribution
         super_dict = {grp: self.age_range_from_str(grp) for grp in supergroups}
+        print(super_dict)
         sub_to_super = {}
         for sub in subgroups:
             sub_range = self.age_range_from_str(sub)
@@ -152,7 +172,15 @@ class AgeGroupHandler:
                     f"Subgroup {sub} is contained by multiple supergroups: {super}"
                 )
 
-        return GroupMap(sub_to_super=sub_to_super, groups=groups)
+        grp_map = GroupMap(sub_to_super=sub_to_super, groups=groups)
+        self.assert_no_missing_subgroups(grp_map, age_varname)
+        sorted_super_ranges = sorted(super_dict.values())
+        assert_range_spanned_exactly(
+            Range(sorted_super_ranges[0].lower, sorted_super_ranges[-1].upper),
+            sorted_super_ranges,
+        )
+
+        return grp_map
 
     def is_valid_age_group(self, x: str) -> bool:
         try:
@@ -183,6 +211,16 @@ class AgeGroupHandler:
             )
             for grp in list(supergroups) + list(subgroups)
         ]
+
+    def assert_no_missing_subgroups(self, group_map: GroupMap, age_varname):
+        for supergrp_nm in group_map.supergroup_names:
+            supergrp = group_map.group(supergrp_nm)
+            supergrp_range = supergrp.get_attribute(age_varname).value
+            subgrp_ranges = [
+                group_map.group(nm).get_attribute(age_varname).value
+                for nm in group_map.subgroup_names(supergrp_nm)
+            ]
+            assert_range_spanned_exactly(supergrp_range, subgrp_ranges)
 
 
 class CategoricalSubgroupHandler:
@@ -249,10 +287,17 @@ class CategoricalSubgroupHandler:
         self,
         supergroups: Iterable[str],
         subgroups: Iterable[str],
-        supergroup_varname: str,
-        subgroup_varname: str,
         **kwargs,
     ) -> GroupMap:
+        assert "supergroup_varname" in kwargs and isinstance(
+            kwargs.get("supergroup_varname"), str
+        )
+        assert "subgroup_varname" in kwargs and isinstance(
+            kwargs.get("subgroup_varname"), str
+        )
+        supergroup_varname: str = kwargs.get("supergroup_varname")  # type: ignore
+        subgroup_varname: str = kwargs.get("subgroup_varname")  # type: ignore
+
         groups = self.make_supergroups(
             supergroups, supergroup_varname
         ) + self.make_subgroups(

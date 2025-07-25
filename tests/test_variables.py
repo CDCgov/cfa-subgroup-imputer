@@ -1,6 +1,10 @@
 import pytest
 
-from cfa_subgroup_imputer.variables import Attribute, Range
+from cfa_subgroup_imputer.variables import (
+    Attribute,
+    Range,
+    assert_range_spanned_exactly,
+)
 
 
 class TestAttribute:
@@ -47,3 +51,22 @@ def test_range():
     ]
 
     assert Range.from_tuple(one_ten.to_tuple()) == one_ten
+
+
+def test_range_span():
+    assert_range_spanned_exactly(Range(1, 10), [Range(1, 10)])
+    assert_range_spanned_exactly(
+        Range(1, 10), [Range(1, 2), Range(2, 3), Range(3, 10)]
+    )
+    with pytest.raises(Exception):
+        assert_range_spanned_exactly(
+            Range(1.1, 10), [Range(1, 2), Range(2, 3), Range(3, 10)]
+        )
+
+    with pytest.raises(Exception):
+        assert_range_spanned_exactly(
+            Range(1, 10), [Range(1, 2), Range(2, 3), Range(3, 10.1)]
+        )
+
+    with pytest.raises(Exception):
+        assert_range_spanned_exactly(Range(1, 10), [Range(1, 2), Range(3, 10)])

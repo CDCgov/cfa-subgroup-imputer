@@ -224,7 +224,7 @@ class GroupMap:
         """
         raise NotImplementedError()
 
-    def group(self, name: str) -> Group:
+    def group(self, name: Hashable) -> Group:
         return self.groups[name]
 
     def restore_densities(self, sub_or_super: GroupType) -> Self:
@@ -276,14 +276,16 @@ class GroupMap:
                 super_to_sub[v] = [k]
         return super_to_sub
 
-    def subgroups(self, name: Hashable) -> list[Hashable]:
+    def subgroup_names(self, name: Hashable) -> list[Hashable]:
+        """
+        Get names of subgroups this supergroup contains
+        """
         assert name in self.super_to_sub.keys()
         return self.super_to_sub[name]
 
-    def supergroup(self, name: Hashable) -> Hashable:
-        assert name in self.sub_to_super.keys()
-        return self.sub_to_super[name]
-
     @property
-    def supergroups(self) -> list[Hashable]:
+    def supergroup_names(self) -> list[Hashable]:
+        """
+        Get all supergroup names.
+        """
         return list(self.super_to_sub.keys())
