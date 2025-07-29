@@ -251,16 +251,5 @@ class TestCategoroical:
             subgroup_varname="speed",
         )
 
-        # print("++++++")
-        # for grp in group_map.groups:
-        #     print(group_map.groups)
-        #     print("\n")
-        # print("------")
-        # print(group_map.sub_to_super)
-
-        for k, v in group_map.groups.items():
-            assert k in groups_expected.keys()
-            assert v == groups_expected[k]
-
-        # assert group_map.groups == groups_expected
+        assert group_map.groups == groups_expected
         assert group_map.sub_to_super == map_expected
