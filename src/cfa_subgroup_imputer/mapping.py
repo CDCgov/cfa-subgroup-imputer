@@ -35,14 +35,140 @@ class Mapper(Protocol):
     supergroups are..." to a sub : super group name/string dict.
     """
 
-    def construct_group_map(
-        self, supergroups: Iterable[str], subgroups: Iterable[str], **kwargs
-    ) -> GroupMap:
+    def construct_group_map(self, **kwargs) -> GroupMap:
         """
-        Takes flat supergroup and subgroup inputs, returns a sub : super
-        group map which can be fed to a GroupMap.
+        Makes a GroupMap.
         """
         ...
+
+
+class ArbitraryGroupHandler:
+    """
+    A class for working with groups given a sub : super group dict
+    """
+
+    def __init__(self, hash_combiner: HashableCombiner):
+        self.hash_combiner: HashableCombiner = hash_combiner
+
+    def make_subgroups(
+        self,
+        sub_super: Iterable[tuple[Hashable, Hashable]],
+        supergroup_varname: str,
+        subgroup_varname: str,
+    ) -> list[Group]:
+        return [
+            Group(
+                name=self.hash_combiner.combine(supergrp, subgrp),
+                attributes=[
+                    Attribute(
+                        value=supergrp,
+                        name=supergroup_varname,
+                        impute_action="ignore",
+                    ),
+                    Attribute(
+                        value=subgrp,
+                        name=subgroup_varname,
+                        impute_action="ignore",
+                    ),
+                ],
+            )
+            for subgrp, supergrp in sub_super
+        ]
+
+    def make_supergroups(
+        self,
+        sub_super: Iterable[tuple[Hashable, Hashable]],
+        supergroup_varname: str,
+    ) -> list[Group]:
+        supergroups = set(sub_sup[1] for sub_sup in sub_super)
+        return [
+            Group(
+                name=supergrp,
+                attributes=[
+                    Attribute(
+                        value=supergrp,
+                        name=supergroup_varname,
+                        impute_action="ignore",
+                    )
+                ],
+            )
+            for supergrp in supergroups
+        ]
+
+    def construct_group_map(
+        self,
+        **kwargs,
+    ) -> GroupMap:
+        assert "sub_super" in kwargs and isinstance(
+            kwargs.get("sub_super"), Iterable
+        )
+        assert "supergroup_varname" in kwargs and isinstance(
+            kwargs.get("supergroup_varname"), str
+        )
+        assert "subgroup_varname" in kwargs and isinstance(
+            kwargs.get("subgroup_varname"), str
+        )
+
+        sub_super: Iterable[tuple[Hashable, Hashable]] = kwargs.get(
+            "sub_super"
+        )  # type: ignore
+        supergroup_varname: str = kwargs.get("supergroup_varname")  # type: ignore
+        subgroup_varname: str = kwargs.get("subgroup_varname")  # type: ignore
+
+        groups = self.make_supergroups(
+            sub_super, supergroup_varname
+        ) + self.make_subgroups(
+            sub_super, supergroup_varname, subgroup_varname
+        )
+
+        sub_to_super = {
+            self.hash_combiner.combine(supergrp, subgrp): supergrp
+            for subgrp, supergrp in sub_super
+        }
+
+        return GroupMap(sub_to_super, groups)
+
+
+class OuterProductSubgroupHandler:
+    """
+    A class for handling subgroups based on a categorical variable, where all subgroups
+    are found in all supergroups.
+
+    For example, if we have age-based supergroups [0-17 years, 18-64 years, 65+ years]
+    and want [low, moderate, high]-risk subgroups, this class makes and handles
+    creating all "0-17 years, low risk", ..., "65+ years, high risk" subgroups
+    and mapping them to the supergroups.
+    """
+
+    def construct_group_map(
+        self,
+        **kwargs,
+    ) -> GroupMap:
+        assert "subgroups" in kwargs and isinstance(
+            kwargs.get("subgroups"), Iterable
+        )
+        assert "supergroups" in kwargs and isinstance(
+            kwargs.get("supergroups"), Iterable
+        )
+
+        supergroups: Iterable[Hashable] = kwargs.get("supergroups")  # type: ignore
+        subgroups: Iterable[Hashable] = kwargs.get("subgroups")  # type: ignore
+        assert all(isinstance(sg, Hashable) for sg in supergroups)
+        assert all(isinstance(sg, Hashable) for sg in subgroups)
+
+        hash_combiner = kwargs.get("hash_combiner", StringPaster())
+        pairs = [
+            (
+                subgrp,
+                supergrp,
+            )
+            for subgrp in subgroups
+            for supergrp in supergroups
+        ]
+
+        return ArbitraryGroupHandler(
+            hash_combiner=hash_combiner
+        ).construct_group_map(sub_super=pairs, **kwargs)
 
 
 # @TODO: Needs more static methods
@@ -228,96 +354,3 @@ class AgeGroupHandler:
                 for nm in group_map.subgroup_names(supergrp_nm)
             ]
             assert_range_spanned_exactly(supergrp_range, subgrp_ranges)
-
-
-class CategoricalSubgroupHandler:
-    """
-    A class for handling subgroups based on a categorical variable, where all subgroups
-    are found in all supergroups.
-
-    For example, if we have age-based supergroups [0-17 years, 18-64 years, 65+ years]
-    and want [low, moderate, high]-risk subgroups, this class makes and handles
-    creating all "0-17 years, low risk", ..., "65+ years, high risk" subgroups
-    and mapping them to the supergroups.
-    """
-
-    def __init__(self, hash_combiner: HashableCombiner = StringPaster()):
-        self.hash_combiner: HashableCombiner = hash_combiner
-
-    def make_subgroups(
-        self,
-        supergroups: Iterable[str],
-        subgroups: Iterable[str],
-        supergroup_varname: str,
-        subgroup_varname: str,
-    ) -> list[Group]:
-        return [
-            Group(
-                name=self.hash_combiner.combine(supergrp, subgrp),
-                attributes=[
-                    Attribute(
-                        value=supergrp,
-                        name=supergroup_varname,
-                        impute_action="ignore",
-                    ),
-                    Attribute(
-                        value=subgrp,
-                        name=subgroup_varname,
-                        impute_action="ignore",
-                    ),
-                ],
-            )
-            for subgrp in list(subgroups)
-            for supergrp in list(supergroups)
-        ]
-
-    def make_supergroups(
-        self,
-        supergroups: Iterable[str],
-        supergroup_varname: str,
-    ) -> list[Group]:
-        return [
-            Group(
-                name=grp,
-                attributes=[
-                    Attribute(
-                        value=grp,
-                        name=supergroup_varname,
-                        impute_action="ignore",
-                    )
-                ],
-            )
-            for grp in list(supergroups)
-        ]
-
-    def construct_group_map(
-        self,
-        supergroups: Iterable[str],
-        subgroups: Iterable[str],
-        **kwargs,
-    ) -> GroupMap:
-        assert "supergroup_varname" in kwargs and isinstance(
-            kwargs.get("supergroup_varname"), str
-        )
-        assert "subgroup_varname" in kwargs and isinstance(
-            kwargs.get("subgroup_varname"), str
-        )
-        supergroup_varname: str = kwargs.get("supergroup_varname")  # type: ignore
-        subgroup_varname: str = kwargs.get("subgroup_varname")  # type: ignore
-
-        groups = self.make_supergroups(
-            supergroups, supergroup_varname
-        ) + self.make_subgroups(
-            supergroups, subgroups, supergroup_varname, subgroup_varname
-        )
-
-        sub_to_super = {
-            self.hash_combiner.combine(
-                supergrp,
-                subgrp,
-            ): supergrp
-            for subgrp in subgroups
-            for supergrp in supergroups
-        }
-
-        return GroupMap(sub_to_super, groups)

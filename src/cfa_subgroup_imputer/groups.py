@@ -72,7 +72,7 @@ class Group:
         )
         measurement_names = [a.name for a in self.attributes]
         assert len(set(measurement_names)) == len(measurement_names), (
-            "Found multiple measurements for same variable."
+            "Found multiple measurements for same attribute."
         )
         to_impute = set(
             a.name for a in self.attributes if a.impute_action == "impute"
@@ -146,7 +146,7 @@ class Group:
 
 class GroupMap:
     """
-    A class that binds supergroups and subgroups together, primarily serving to validate inputs.
+    A class that binds supergroups and subgroups together.
     """
 
     def __init__(
@@ -160,6 +160,8 @@ class GroupMap:
         # Should probably store one dict of group name to Group, then sub<>super dicts as dict[str, str]
         self.sub_to_super = sub_to_super
         self.super_to_sub = GroupMap.make_one_to_many(sub_to_super)
+        for group in groups:
+            print(f"{group.name}: {group}\n")
         self.groups = {group.name: group for group in groups}
         self._validate()
 

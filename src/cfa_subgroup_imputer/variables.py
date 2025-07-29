@@ -7,7 +7,6 @@ from typing import (
     Any,
     Hashable,
     Literal,
-    NamedTuple,
     Self,
     get_args,
 )
@@ -215,20 +214,4 @@ def assert_range_spanned_exactly(
     assert cumulative.upper == range.upper
 
 
-GroupableTypes = Literal["Categorical", "Continuous"]
-
-
-class GroupingVariable(NamedTuple):
-    """
-    A class for holding variables that can define subgroups
-
-    Parameters
-    name: str
-        The name of the variable.
-    type: GroupableTypes
-        The type of variable.
-    ----------
-    """
-
-    name: str
-    type: GroupableTypes
+GroupableTypes = Literal["categorical", "age"]
