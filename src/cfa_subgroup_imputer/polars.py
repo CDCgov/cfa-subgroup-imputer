@@ -3,7 +3,6 @@ Module for polars interface.
 """
 
 from collections.abc import Collection
-from typing import Literal, Protocol, runtime_checkable
 
 import polars as pl
 
@@ -15,23 +14,6 @@ from cfa_subgroup_imputer.mapping import (
     StringPaster,
 )
 from cfa_subgroup_imputer.variables import GroupableTypes
-
-
-@runtime_checkable
-class FilterConstructor(Protocol):
-    """
-    A Protocol that constructs filters for populating sub and supergroup data
-    from polars dataframes.
-    """
-
-    def construct_filter(
-        self,
-        supergroup_var: str,
-        supergroup_name: str,
-        subgroup_var: str,
-        subgroup_name: str,
-        group_type: Literal["subgroup", "supergroup"],
-    ) -> pl.Expr: ...
 
 
 def create_group_map(
