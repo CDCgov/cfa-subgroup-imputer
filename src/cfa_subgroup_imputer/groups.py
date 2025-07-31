@@ -189,6 +189,48 @@ class GroupMap:
         self.groups = {group.name: group for group in groups}
         self._validate()
 
+    @classmethod
+    def from_supergroups(
+        cls,
+        super_to_sub: dict[Hashable, Iterable[Hashable]],
+        groups: Iterable[Group],
+    ) -> Self:
+        """
+        Alternative constructor, takes in a supergroup : [subgroups] dict.
+        """
+        sub_to_super = GroupMap.make_many_to_one(super_to_sub)
+        return cls(sub_to_super, groups)
+
+    def _assert_names_unique(self) -> None:
+        """
+        Ensure that super and subgroup names are all unique.
+        """
+        group_names = [group.name for group in self.groups.values()]
+        repeats = [
+            name for name, count in Counter(group_names).items() if count > 1
+        ]
+        assert len(repeats) == 0, (
+            f"The following group names are not unique: {repeats}"
+        )
+
+    def _assert_no_missing_data(self) -> None:
+        """
+        Ensure that each supergroup's size is the sum of constituent subgroup sizes.
+        """
+        raise NotImplementedError()
+
+    def _assert_no_missing_population(self, size_from: Hashable) -> None:
+        """
+        Ensure that each supergroup's size is the sum of constituent subgroup sizes.
+        """
+        raise NotImplementedError()
+
+    def _validate(self):
+        self._assert_names_unique()
+        # @TODO: Should these be done at (dis)aggregation time outside this class?
+        # self._assert_no_missing_population()
+        # self._assert_no_missing_data()
+
     def add_attribute(
         self,
         group_type: GroupType,
