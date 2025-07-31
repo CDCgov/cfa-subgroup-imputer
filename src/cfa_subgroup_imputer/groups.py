@@ -54,9 +54,9 @@ class Group:
             return False
 
         my_attr = set(a.name for a in self.attributes)
-        their_attr = set(a.name for a in self.attributes)
+        their_attr = set(a.name for a in x.attributes)
 
-        if not my_attr.difference(their_attr) == set():
+        if not my_attr == their_attr:
             return False
 
         return all(
