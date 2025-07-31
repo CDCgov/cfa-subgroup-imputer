@@ -189,6 +189,55 @@ class GroupMap:
         self.groups = {group.name: group for group in groups}
         self._validate()
 
+    def add_attribute(
+        self,
+        group_type: GroupType,
+        attribute_name: Hashable,
+        attribute_values: dict[Hashable, object],
+        impute_action: ImputeAction,
+        attribute_class: type[Attribute] | type[ImputableAttribute],
+        measurement_type: MeasurementType | None = None,
+    ):
+        """
+        Bulk addition of attributes to all sub or supergroups.
+
+        Parameters
+        ----------
+        group_type : GroupType
+            Should the attribute be added to supergroups or subgroups?
+        attribute_name : Hashable
+            The name of the attribute to be added.
+        attribute_values : dict[Hashable, object]
+            For all groups of the specified type, the values of the attribute to be added.
+        impute_action : ImputeAction
+            The impute_action for the attribute to be added.
+        attribute_class : type[Attribute] | type[ImputableAttribute]
+            The class of the attribute to be added.
+        measurement_type : MeasurementType | None
+            The measurement type of the attribute to be added, if it is an ImputableAttribute.
+        """
+        if group_type == "supergroup":
+            group_names = self.supergroup_names
+        elif group_type == "subgroup":
+            group_names = [
+                k for k in self.groups if k not in self.supergroup_names
+            ]
+        else:
+            raise ValueError(f"Unknown group_type: {group_type}")
+        assert set(group_names).issubset(attribute_values.keys()), (
+            f"Cannot add attribute {attribute_name} to groups {set(group_names).difference(attribute_values.keys())} which are not found in `attr_values`. "
+        )
+        kwargs = {"name": attribute_name, "impute_action": impute_action}
+        if attribute_class is ImputableAttribute:
+            kwargs |= {"measurement_type": measurement_type}
+        for group_name in group_names:
+            attr = attribute_class(
+                **(kwargs | {"value": attribute_values[group_name]})
+            )  # pyright: ignore[reportCallIssue]
+            self.groups[group_name] = self.groups[group_name].add_attribute(
+                attr
+            )
+
     @classmethod
     def from_supergroups(
         cls,

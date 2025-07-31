@@ -1,6 +1,6 @@
 import pytest
 
-from cfa_subgroup_imputer.groups import Group
+from cfa_subgroup_imputer.groups import Group, GroupMap
 from cfa_subgroup_imputer.variables import Attribute, ImputableAttribute
 
 
@@ -137,3 +137,69 @@ class TestGroup:
         print(child)
 
         assert child == child_expected
+
+
+class TestGroupMap:
+    def test_add_attribute(self):
+        group_map = GroupMap(
+            sub_to_super={
+                "subgroup1": "supergroup1",
+                "subgroup2": "supergroup1",
+            },
+            groups=[
+                Group(name="supergroup1", attributes=[]),
+                Group(name="subgroup1", attributes=[]),
+                Group(name="subgroup2", attributes=[]),
+            ],
+        )
+
+        group_map.add_attribute(
+            group_type="subgroup",
+            attribute_name="new_attribute",
+            attribute_values={"subgroup1": "value1", "subgroup2": "value2"},
+            impute_action="ignore",
+            attribute_class=Attribute,
+        )
+
+        group_map.add_attribute(
+            group_type="supergroup",
+            attribute_name="other_attribute",
+            attribute_values={"supergroup1": "value0"},
+            impute_action="ignore",
+            attribute_class=Attribute,
+        )
+
+        groups_expected = {
+            "supergroup1": Group(
+                name="supergroup1",
+                attributes=[
+                    Attribute(
+                        name="other_attribute",
+                        value="value0",
+                        impute_action="ignore",
+                    )
+                ],
+            ),
+            "subgroup1": Group(
+                name="subgroup1",
+                attributes=[
+                    Attribute(
+                        name="new_attribute",
+                        value="value1",
+                        impute_action="ignore",
+                    )
+                ],
+            ),
+            "subgroup2": Group(
+                name="subgroup2",
+                attributes=[
+                    Attribute(
+                        name="new_attribute",
+                        value="value2",
+                        impute_action="ignore",
+                    )
+                ],
+            ),
+        }
+
+        assert group_map.groups == groups_expected
