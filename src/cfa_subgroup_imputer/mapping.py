@@ -56,23 +56,28 @@ class ArbitraryGroupHandler:
         supergroup_varname: str,
         subgroup_varname: str,
     ) -> list[Group]:
+        """
+        Make empty (attribute-less) subgroups.
+
+        See construct_group_map kwargs for parameter details
+        """
         return [
             Group(
-                name=self.id_combiner.combine(supergrp, subgrp),
+                name=self.id_combiner.combine(supercat, subcat),
                 attributes=[
                     Attribute(
-                        value=supergrp,
+                        value=supercat,
                         name=supergroup_varname,
                         impute_action="ignore",
                     ),
                     Attribute(
-                        value=subgrp,
+                        value=subcat,
                         name=subgroup_varname,
                         impute_action="ignore",
                     ),
                 ],
             )
-            for subgrp, supergrp in sub_super
+            for subcat, supercat in sub_super
         ]
 
     def make_supergroups(
@@ -80,25 +85,46 @@ class ArbitraryGroupHandler:
         sub_super: Iterable[tuple[Hashable, Hashable]],
         supergroup_varname: str,
     ) -> list[Group]:
-        supergroups = set(sub_sup[1] for sub_sup in sub_super)
+        """
+        Make empty (attribute-less) supergroups.
+
+        See construct_group_map kwargs for parameter details
+        """
+        supergroup_cats = set(sub_sup[1] for sub_sup in sub_super)
         return [
             Group(
-                name=supergrp,
+                name=supercat,
                 attributes=[
                     Attribute(
-                        value=supergrp,
+                        value=supercat,
                         name=supergroup_varname,
                         impute_action="ignore",
                     )
                 ],
             )
-            for supergrp in supergroups
+            for supercat in supergroup_cats
         ]
 
     def construct_group_map(
         self,
         **kwargs,
     ) -> GroupMap:
+        """
+        Constructs a GroupMap from all subgroups defined by the categories of subgroup
+        and supergroup variables.
+
+        Parameters
+        ----------
+        sub_super: Iterable[tuple[Hashable, Hashable]]
+            Each element is a pair defining a subgroup via the category of both
+            the subgrouping and supergrouping variables. For example,
+            ("low", "0-17") could define a group of low-risk, 0-17 year olds, which
+            is a subgroup of 0-17 year olds based on risk.
+        supergroup_varname: str
+            What is the variable that defines the supergroup?
+        supergroup_varname: str
+            What is the variable that defines the subgroup?
+        """
         assert "sub_super" in kwargs and isinstance(
             kwargs.get("sub_super"), Iterable
         )
@@ -131,8 +157,8 @@ class ArbitraryGroupHandler:
 
 class OuterProductSubgroupHandler:
     """
-    A class for handling subgroups based on a categorical variable, where all subgroups
-    are found in all supergroups.
+    A class for handling subgroups based on a categorical variable, where all categories
+    (levels) of the subgrouping variable are found in all supergroups.
 
     For example, if we have age-based supergroups [0-17 years, 18-64 years, 65+ years]
     and want [low, moderate, high]-risk subgroups, this class makes and handles
