@@ -10,10 +10,10 @@ import polars as pl
 
 from cfa_subgroup_imputer.variables import (
     Attribute,
-    DensityMeasurementType,
     ImputableAttribute,
     ImputeAction,
     MeasurementType,
+    RateMeasurementType,
 )
 
 GroupType = Literal["supergroup", "subgroup"]
@@ -99,23 +99,26 @@ class Group:
             name=self.name, attributes=self.attributes + (attribute,)
         )
 
-    def rate_to_count(self, size_from: Hashable = "size") -> Self:
-        """
-        Make all measurements masses.
-        """
-
-        size = self.get_attribute(size_from).value
-        assert isinstance(size, float)
-        assert size > 0
-        attributes = [
-            a.to_count(size)
-            if a.impute_action == "impute"
-            and isinstance(a, ImputableAttribute)
-            and a.measurement_type in get_args(DensityMeasurementType)
-            else a
-            for a in self.attributes
-        ]
-        return type(self)(name=self.name, attributes=attributes)
+    def disaggregate_one_subgroup(
+        self,
+        subgroup: Self,
+        prop: float,
+        size_from: Hashable = "size",
+        subgroup_size_from: Hashable = "size",
+    ) -> Self:
+        assert 0.0 <= prop <= 1.0, (
+            f"Cannot disaggregate proportion {prop} of {self}."
+        )
+        disagg_attributes = list(subgroup.attributes)
+        for attr in self.rate_to_count(size_from).attributes:
+            if attr.impute_action == "copy":
+                disagg_attributes.append(attr)
+            elif attr.impute_action == "impute":
+                assert isinstance(attr, ImputableAttribute)
+                disagg_attributes.append(attr * prop)
+        return type(self)(subgroup.name, disagg_attributes).restore_rates(
+            subgroup_size_from
+        )
 
     def get_attribute(self, name: Hashable) -> Attribute:
         """
@@ -128,18 +131,34 @@ class Group:
         )
         return name_matched[0]
 
+    def rate_to_count(self, size_from: Hashable = "size") -> Self:
+        """
+        Make all measurements masses.
+        """
+
+        size = self.get_attribute(size_from).value
+        assert size > 0
+        attributes = [
+            a.to_count(size)
+            if a.impute_action == "impute"
+            and isinstance(a, ImputableAttribute)
+            and a.measurement_type in get_args(RateMeasurementType)
+            else a
+            for a in self.attributes
+        ]
+        return type(self)(name=self.name, attributes=attributes)
+
     def restore_rates(self, size_from: Hashable = "size") -> Self:
         """
         Undo density_to_mass().
         """
         size = self.get_attribute(size_from).value
-        assert isinstance(size, float)
         assert size > 0
         attributes = [
             a.to_rate(size)
             if a.impute_action == "impute"
             and isinstance(a, ImputableAttribute)
-            and a.measurement_type == "mass_from_density"
+            and a.measurement_type == "count_from_rate"
             else a
             for a in self.attributes
         ]

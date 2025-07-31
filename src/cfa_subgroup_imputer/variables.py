@@ -11,10 +11,10 @@ from typing import (
     get_args,
 )
 
-MassMeasurementType = Literal["mass", "mass_from_density"]
-DensityMeasurementType = Literal["density", "density_from_mass"]
+CountMeasurementType = Literal["count", "count_from_rate"]
+RateMeasurementType = Literal["rate", "rate_from_count"]
 MeasurementType = Literal[
-    "mass", "density", "mass_from_density", "density_from_mass"
+    "count", "rate", "count_from_rate", "rate_from_count"
 ]
 """
 How a measurement behaves for disaggregation.
@@ -94,7 +94,7 @@ class ImputableAttribute(Attribute):
 
         Parameters
         ----------
-        value : float
+        value : float | int
             The value, e.g. a number of cases.
         name : Hashable
             What is this variable? E.g., "size" or "vaccination rate"
@@ -113,7 +113,10 @@ class ImputableAttribute(Attribute):
         assert self.impute_action in get_args(ImputeAction)
 
     def __eq__(self, x):
-        return super().__eq__() and self.measurement_type == x.measurement_type
+        # @TODO: should we check strict equality? allow RateType == RateType? make a toggle? add .equivalent()?
+        return (
+            super().__eq__(x) and self.measurement_type == x.measurement_type
+        )
 
     def __mul__(self, k: float) -> Self:
         return type(self)(
@@ -128,7 +131,7 @@ class ImputableAttribute(Attribute):
             value=self.value * size,
             name=self.name,
             impute_action=self.impute_action,
-            measurement_type="mass_from_density",
+            measurement_type="count_from_rate",
         )
 
     def to_rate(self, volume: float) -> Self:
@@ -136,7 +139,7 @@ class ImputableAttribute(Attribute):
             value=self.value / volume,
             name=self.name,
             impute_action=self.impute_action,
-            measurement_type="density_from_mass",
+            measurement_type="rate_from_count",
         )
 
 
@@ -186,6 +189,9 @@ class Range:
 
     def __repr__(self):
         return f"Range({self.lower},{self.upper})"
+
+    def duration(self) -> float:
+        return self.upper - self.lower
 
     @classmethod
     def from_tuple(cls, low_high: tuple[float, float]):
