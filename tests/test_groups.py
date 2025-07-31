@@ -1,7 +1,7 @@
 import pytest
 
 from cfa_subgroup_imputer.groups import Group
-from cfa_subgroup_imputer.variables import Attribute
+from cfa_subgroup_imputer.variables import Attribute, ImputableAttribute
 
 
 class TestGroup:
@@ -68,3 +68,72 @@ class TestGroup:
                 ),
             ],
         )
+
+    def test_disagg_partial(self):
+        parent = Group(
+            name="parent",
+            attributes=[
+                Attribute(name="size", impute_action="ignore", value=100),
+                Attribute(
+                    name="foo",
+                    impute_action="ignore",
+                    value="this should not be copied",
+                ),
+                Attribute(name="bar", impute_action="copy", value=None),
+                ImputableAttribute(
+                    name="mcguffin",
+                    impute_action="impute",
+                    value=3.14159,
+                    measurement_type="count",
+                ),
+                ImputableAttribute(
+                    name="nee",
+                    impute_action="impute",
+                    value=2.718282,
+                    measurement_type="rate",
+                ),
+            ],
+        )
+        child_precursor = Group(
+            name="child",
+            attributes=[
+                Attribute(name="size", impute_action="ignore", value=42),
+                Attribute(
+                    name="spanish inquisition",
+                    impute_action="ignore",
+                    value="nobody expects",
+                ),
+            ],
+        )
+
+        child_expected = Group(
+            name="child",
+            attributes=[
+                Attribute(name="size", impute_action="ignore", value=42),
+                Attribute(name="bar", impute_action="copy", value=None),
+                ImputableAttribute(
+                    name="mcguffin",
+                    impute_action="impute",
+                    value=0.42 * 3.14159,
+                    measurement_type="count",
+                ),
+                ImputableAttribute(
+                    name="nee",
+                    impute_action="impute",
+                    value=2.718282,
+                    measurement_type="rate_from_count",
+                ),
+                Attribute(
+                    name="spanish inquisition",
+                    impute_action="ignore",
+                    value="nobody expects",
+                ),
+            ],
+        )
+
+        child = parent.disaggregate_one_subgroup(
+            subgroup=child_precursor, prop=0.42
+        )
+        print(child)
+
+        assert child == child_expected
