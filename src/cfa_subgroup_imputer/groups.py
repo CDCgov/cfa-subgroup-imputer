@@ -2,7 +2,8 @@
 Submodule for broad-sense handling of supergroups and subgroups.
 """
 
-from collections.abc import Iterable
+from collections import Counter
+from collections.abc import Iterable, Mapping
 from typing import Hashable, Literal, Self, get_args
 
 import polars as pl
@@ -48,13 +49,30 @@ class Group:
         self.attributes = tuple(attributes)
         self._validate()
 
+    def __eq__(self, x: Self):
+        if self.name != x.name:
+            return False
+
+        my_attr = set(a.name for a in self.attributes)
+        their_attr = set(a.name for a in x.attributes)
+
+        if not my_attr == their_attr:
+            return False
+
+        return all(
+            self.get_attribute(a) == x.get_attribute(a) for a in my_attr
+        )
+
+    def __repr__(self):
+        return f"Group(name={self.name}, attributes={[a for a in self.attributes]})"
+
     def _validate(self):
         assert all([isinstance(a, Attribute) for a in self.attributes]), (
             "All attributes must be of class Attribute"
         )
         measurement_names = [a.name for a in self.attributes]
         assert len(set(measurement_names)) == len(measurement_names), (
-            "Found multiple measurements for same variable."
+            "Found multiple measurements for same attribute."
         )
         to_impute = set(
             a.name for a in self.attributes if a.impute_action == "impute"
@@ -101,10 +119,12 @@ class Group:
         """
         Retrieve stated measurement.
         """
-        assert name in self.attributes, (
-            f"Group {self.name} has no attribute {name}"
+        name_matched = [a for a in self.attributes if a.name == name]
+        assert len(name_matched) > 0, f"{self} has no attribute {name}"
+        assert len(name_matched) == 1, (
+            f"Malformed group {self} has multiple attributes {name}"
         )
-        return [a for a in self.attributes if a.name == name][0]
+        return name_matched[0]
 
     def restore_rates(self, size_from: Hashable = "size") -> Self:
         """
@@ -126,10 +146,14 @@ class Group:
 
 class GroupMap:
     """
-    A class that binds supergroups and subgroups together, primarily serving to validate inputs.
+    A class that binds supergroups and subgroups together.
     """
 
-    def __init__(self, sub_to_super: dict[str, str], groups: Iterable[Group]):
+    def __init__(
+        self,
+        sub_to_super: Mapping[Hashable, Hashable],
+        groups: Iterable[Group],
+    ):
         """
         Default constructor, takes in a subgroup : supergroup dict.
         """
@@ -141,7 +165,9 @@ class GroupMap:
 
     @classmethod
     def from_supergroups(
-        cls, super_to_sub: dict[str, Iterable[str]], groups: Iterable[Group]
+        cls,
+        super_to_sub: dict[Hashable, Iterable[Hashable]],
+        groups: Iterable[Group],
     ) -> Self:
         """
         Alternative constructor, takes in a supergroup : [subgroups] dict.
@@ -153,7 +179,13 @@ class GroupMap:
         """
         Ensure that super and subgroup names are all unique.
         """
-        raise NotImplementedError()
+        group_names = [group.name for group in self.groups.values()]
+        repeats = [
+            name for name, count in Counter(group_names).items() if count > 1
+        ]
+        assert len(repeats) == 0, (
+            f"The following group names are not unique: {repeats}"
+        )
 
     def _assert_no_missing_data(self) -> None:
         """
@@ -161,7 +193,7 @@ class GroupMap:
         """
         raise NotImplementedError()
 
-    def _assert_no_missing_population(self) -> None:
+    def _assert_no_missing_population(self, size_from: Hashable) -> None:
         """
         Ensure that each supergroup's size is the sum of constituent subgroup sizes.
         """
@@ -169,9 +201,9 @@ class GroupMap:
 
     def _validate(self):
         self._assert_names_unique()
-        self._assert_no_missing_population()
-        self._assert_no_missing_data()
-        assert self.aggregatable ^ self.disaggregatable
+        # @TODO: Should these be done at (dis)aggregation time outside this class?
+        # self._assert_no_missing_population()
+        # self._assert_no_missing_data()
 
     def add_data_from_polars(self, df: pl.DataFrame) -> Self:
         """
@@ -192,7 +224,7 @@ class GroupMap:
         """
         raise NotImplementedError()
 
-    def group(self, name: str) -> Group:
+    def group(self, name: Hashable) -> Group:
         return self.groups[name]
 
     def restore_densities(self, sub_or_super: GroupType) -> Self:
@@ -222,8 +254,8 @@ class GroupMap:
 
     @staticmethod
     def make_many_to_one(
-        super_to_sub: dict[str, Iterable[str]],
-    ) -> dict[str, str]:
+        super_to_sub: Mapping[Hashable, Iterable[Hashable]],
+    ) -> Mapping[Hashable, Hashable]:
         """
         Inverts a supergroup : [subgroups] one to one dict to a subgroup : supergroup one to many dict
         """
@@ -231,8 +263,8 @@ class GroupMap:
 
     @staticmethod
     def make_one_to_many(
-        sub_to_super: dict[str, str],
-    ) -> dict[str, list[str]]:
+        sub_to_super: Mapping[Hashable, Hashable],
+    ) -> Mapping[Hashable, list[Hashable]]:
         """
         Inverts a subgroup : supergroup one to one dict to a supergroup : [subgroups] one to many dict
         """
@@ -244,14 +276,16 @@ class GroupMap:
                 super_to_sub[v] = [k]
         return super_to_sub
 
-    def subgroups(self, name: str) -> list[str]:
+    def subgroup_names(self, name: Hashable) -> list[Hashable]:
+        """
+        Get names of subgroups this supergroup contains
+        """
         assert name in self.super_to_sub.keys()
         return self.super_to_sub[name]
 
-    def supergroup(self, name: str) -> str:
-        assert name in self.sub_to_super.keys()
-        return self.sub_to_super[name]
-
     @property
-    def supergroups(self) -> list[str]:
+    def supergroup_names(self) -> list[Hashable]:
+        """
+        Get all supergroup names.
+        """
         return list(self.super_to_sub.keys())
