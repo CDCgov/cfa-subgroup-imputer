@@ -16,7 +16,7 @@ from cfa_subgroup_imputer.variables import (
 
 
 @runtime_checkable
-class HashableCombiner(Protocol):
+class IdCombiner(Protocol):
     def combine(self, *args) -> Hashable: ...
 
 
@@ -47,8 +47,8 @@ class ArbitraryGroupHandler:
     A class for working with groups given a sub : super group dict
     """
 
-    def __init__(self, hash_combiner: HashableCombiner):
-        self.hash_combiner: HashableCombiner = hash_combiner
+    def __init__(self, id_combiner: IdCombiner):
+        self.id_combiner: IdCombiner = id_combiner
 
     def make_subgroups(
         self,
@@ -58,7 +58,7 @@ class ArbitraryGroupHandler:
     ) -> list[Group]:
         return [
             Group(
-                name=self.hash_combiner.combine(supergrp, subgrp),
+                name=self.id_combiner.combine(supergrp, subgrp),
                 attributes=[
                     Attribute(
                         value=supergrp,
@@ -122,7 +122,7 @@ class ArbitraryGroupHandler:
         )
 
         sub_to_super = {
-            self.hash_combiner.combine(supergrp, subgrp): supergrp
+            self.id_combiner.combine(supergrp, subgrp): supergrp
             for subgrp, supergrp in sub_super
         }
 
@@ -156,7 +156,7 @@ class OuterProductSubgroupHandler:
         assert all(isinstance(sg, Hashable) for sg in supergroups)
         assert all(isinstance(sg, Hashable) for sg in subgroups)
 
-        hash_combiner = kwargs.get("hash_combiner", StringPaster())
+        id_combiner = kwargs.get("id_combiner", StringPaster())
         pairs = [
             (
                 subgrp,
@@ -167,7 +167,7 @@ class OuterProductSubgroupHandler:
         ]
 
         return ArbitraryGroupHandler(
-            hash_combiner=hash_combiner
+            id_combiner=id_combiner
         ).construct_group_map(sub_super=pairs, **kwargs)
 
 

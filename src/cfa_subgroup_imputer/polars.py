@@ -31,7 +31,7 @@ def create_group_map(
             for row_dict in subgroup_to_supergroup.to_dicts()
         ]
         return ArbitraryGroupHandler(
-            hash_combiner=StringPaster()
+            id_combiner=StringPaster()
         ).construct_group_map(
             sub_super=sub_super_pairs,
             supergroup_varname=supergroups_from,
