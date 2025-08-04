@@ -110,11 +110,10 @@ sub_to_super = {
 
 Both subgroups and supergroups are defined by values of some _variable_.
 The package provides support for automatically creating mappings for:
-- Age groups, via the `AgeGroupHandler`, in which both subgroups and supergroups are defined by age.
-- Subgroups which are defined by a categorical random variable which is _distinct_ from the one defines supergroups, and for which all levels are present in all supergroups, via the `OuterProductHandler`. For example, stratifying regional supergroups by vaccination status, where the supergroups are defined by region, and subgroups are defined by the vaccination status _and_ region.
+1. Age groups, via the `AgeGroupHandler`, in which both subgroups and supergroups are defined by age.
+2. Subgroups which are defined by a categorical random variable which is _distinct_ from the one defines supergroups, and for which all levels are present in all supergroups, via the `OuterProductHandler`. For example, stratifying regional supergroups by vaccination status, where the supergroups are defined by region, and subgroups are defined by the vaccination status _and_ region.
+3. Case 2. except that not all subgroup categories are present in all supergroup categories. For example, if the supergroups are states and the subgroups are counties. In this case, all pairs of subgroup and supergroup categories needed must be provided.
 
-For completeness, the `ArbitraryGroupHandler`, which works based on a user-provided map.
-This is suitable for handling cases like the `OuterProductHandler` but where not all subgroups are present in all supergroups (and without adding size-zero groups) or for cases where the subgrouping variables are different in different supergroups.
 
 ## What is subgroup disaggregation anyways?
 
