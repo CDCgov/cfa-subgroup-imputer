@@ -2,7 +2,6 @@
 Submodule for broad-sense handling of supergroups and subgroups.
 """
 
-from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import Hashable, Literal, Self, get_args
 
@@ -187,98 +186,6 @@ class GroupMap:
             group_names = set(sub_to_super.values()).union(sub_to_super.keys())
             groups = [Group(name) for name in group_names]
         self.groups = {group.name: group for group in groups}
-        self._validate()
-
-    @classmethod
-    def from_supergroups(
-        cls,
-        super_to_sub: dict[Hashable, Iterable[Hashable]],
-        groups: Iterable[Group],
-    ) -> Self:
-        """
-        Alternative constructor, takes in a supergroup : [subgroups] dict.
-        """
-        sub_to_super = GroupMap.make_many_to_one(super_to_sub)
-        return cls(sub_to_super, groups)
-
-    def _assert_names_unique(self) -> None:
-        """
-        Ensure that super and subgroup names are all unique.
-        """
-        group_names = [group.name for group in self.groups.values()]
-        repeats = [
-            name for name, count in Counter(group_names).items() if count > 1
-        ]
-        assert len(repeats) == 0, (
-            f"The following group names are not unique: {repeats}"
-        )
-
-    def _assert_no_missing_data(self) -> None:
-        """
-        Ensure that each supergroup's size is the sum of constituent subgroup sizes.
-        """
-        raise NotImplementedError()
-
-    def _assert_no_missing_population(self, size_from: Hashable) -> None:
-        """
-        Ensure that each supergroup's size is the sum of constituent subgroup sizes.
-        """
-        raise NotImplementedError()
-
-    def _validate(self):
-        self._assert_names_unique()
-        # @TODO: Should these be done at (dis)aggregation time outside this class?
-        # self._assert_no_missing_population()
-        # self._assert_no_missing_data()
-
-    def add_attribute(
-        self,
-        group_type: GroupType,
-        attribute_name: Hashable,
-        attribute_values: dict[Hashable, object],
-        impute_action: ImputeAction,
-        attribute_class: type[Attribute] | type[ImputableAttribute],
-        measurement_type: MeasurementType | None = None,
-    ):
-        """
-        Bulk addition of attributes to all sub or supergroups.
-
-        Parameters
-        ----------
-        group_type : GroupType
-            Should the attribute be added to supergroups or subgroups?
-        attribute_name : Hashable
-            The name of the attribute to be added.
-        attribute_values : dict[Hashable, object]
-            For all groups of the specified type, the values of the attribute to be added.
-        impute_action : ImputeAction
-            The impute_action for the attribute to be added.
-        attribute_class : type[Attribute] | type[ImputableAttribute]
-            The class of the attribute to be added.
-        measurement_type : MeasurementType | None
-            The measurement type of the attribute to be added, if it is an ImputableAttribute.
-        """
-        if group_type == "supergroup":
-            group_names = self.supergroup_names
-        elif group_type == "subgroup":
-            group_names = [
-                k for k in self.groups if k not in self.supergroup_names
-            ]
-        else:
-            raise ValueError(f"Unknown group_type: {group_type}")
-        assert set(group_names).issubset(attribute_values.keys()), (
-            f"Cannot add attribute {attribute_name} to groups {set(group_names).difference(attribute_values.keys())} which are not found in `attr_values`. "
-        )
-        kwargs = {"name": attribute_name, "impute_action": impute_action}
-        if attribute_class is ImputableAttribute:
-            kwargs |= {"measurement_type": measurement_type}
-        for group_name in group_names:
-            attr = attribute_class(
-                **(kwargs | {"value": attribute_values[group_name]})
-            )  # pyright: ignore[reportCallIssue]
-            self.groups[group_name] = self.groups[group_name].add_attribute(
-                attr
-            )
 
     @classmethod
     def from_supergroups(
@@ -291,36 +198,6 @@ class GroupMap:
         """
         sub_to_super = GroupMap.make_many_to_one(super_to_sub)
         return cls(sub_to_super, groups)
-
-    def _assert_names_unique(self) -> None:
-        """
-        Ensure that super and subgroup names are all unique.
-        """
-        group_names = [group.name for group in self.groups.values()]
-        repeats = [
-            name for name, count in Counter(group_names).items() if count > 1
-        ]
-        assert len(repeats) == 0, (
-            f"The following group names are not unique: {repeats}"
-        )
-
-    def _assert_no_missing_data(self) -> None:
-        """
-        Ensure that each supergroup's size is the sum of constituent subgroup sizes.
-        """
-        raise NotImplementedError()
-
-    def _assert_no_missing_population(self, size_from: Hashable) -> None:
-        """
-        Ensure that each supergroup's size is the sum of constituent subgroup sizes.
-        """
-        raise NotImplementedError()
-
-    def _validate(self):
-        self._assert_names_unique()
-        # @TODO: Should these be done at (dis)aggregation time outside this class?
-        # self._assert_no_missing_population()
-        # self._assert_no_missing_data()
 
     def add_attribute(
         self,
