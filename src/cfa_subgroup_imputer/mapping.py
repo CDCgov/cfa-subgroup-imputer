@@ -5,11 +5,11 @@ Submodule for enumerating subgroup and supergroup maps.
 import itertools
 import re
 from abc import ABC
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from math import inf
-from typing import Hashable, Protocol, Sequence, runtime_checkable
+from typing import Hashable, Protocol, runtime_checkable
 
-from cfa_subgroup_imputer.groups import Group, GroupMap
+from cfa_subgroup_imputer.groups import GroupMap
 from cfa_subgroup_imputer.variables import (
     Attribute,
     Range,
@@ -284,8 +284,6 @@ class AgeGroupHandler:
         age_varname = kwargs.get("variable_name", "age")
         missing_option = kwargs.get("missing_option", "error")
 
-        groups = self.make_groups(supergroups, subgroups, age_varname)
-
         # Brute force attribution
         super_dict = {grp: self.age_range_from_str(grp) for grp in supergroups}
         sub_to_super = {}
@@ -310,7 +308,26 @@ class AgeGroupHandler:
                     f"Subgroup {sub} is contained by multiple supergroups: {super}"
                 )
 
-        grp_map = GroupMap(sub_to_super=sub_to_super, groups=groups)
+        grp_map = GroupMap(sub_to_super=sub_to_super, groups=None)
+        grp_map.add_attribute(
+            group_type="subgroup",
+            attribute_name=age_varname,
+            attribute_values={
+                subgrp: self.age_range_from_str(subgrp) for subgrp in subgroups
+            },
+            impute_action="ignore",
+            attribute_class=Attribute,
+        )
+        grp_map.add_attribute(
+            group_type="supergroup",
+            attribute_name=age_varname,
+            attribute_values={
+                supergrp: self.age_range_from_str(supergrp)
+                for supergrp in supergroups
+            },
+            impute_action="ignore",
+            attribute_class=Attribute,
+        )
         self.assert_no_missing_subgroups(grp_map, age_varname)
         sorted_super_ranges = sorted(super_dict.values())
         assert_range_spanned_exactly(
@@ -329,26 +346,6 @@ class AgeGroupHandler:
                 return False
             else:
                 raise e
-
-    def make_groups(
-        self,
-        supergroups: Iterable[str],
-        subgroups: Iterable[str],
-        age_varname: str,
-    ) -> list[Group]:
-        return [
-            Group(
-                name=grp,
-                attributes=[
-                    Attribute(
-                        value=self.age_range_from_str(grp),
-                        name=age_varname,
-                        impute_action="ignore",
-                    )
-                ],
-            )
-            for grp in list(supergroups) + list(subgroups)
-        ]
 
     def assert_no_missing_subgroups(self, group_map: GroupMap, age_varname):
         for supergrp_nm in group_map.supergroup_names:
