@@ -2,10 +2,12 @@
 Submodule for enumerating subgroup and supergroup maps.
 """
 
+import itertools
 import re
+from abc import ABC
 from collections.abc import Iterable
 from math import inf
-from typing import Hashable, Protocol, runtime_checkable
+from typing import Hashable, Protocol, Sequence, runtime_checkable
 
 from cfa_subgroup_imputer.groups import Group, GroupMap
 from cfa_subgroup_imputer.variables import (
@@ -15,14 +17,11 @@ from cfa_subgroup_imputer.variables import (
 )
 
 
-@runtime_checkable
-class IdCombiner(Protocol):
-    def combine(self, *args) -> Hashable: ...
-
-
-class StringPaster:
-    def combine(self, *args) -> Hashable:
-        return "_".join(str(arg) for arg in args)
+def assert_hashable_sequence(x) -> None:
+    assert isinstance(x, Sequence), f"{x} is not a Sequence"
+    assert all(isinstance(x_, Hashable) for x_ in x), (
+        f"Not all items in {x} are hashable"
+    )
 
 
 @runtime_checkable
@@ -42,117 +41,74 @@ class Mapper(Protocol):
         ...
 
 
-class ArbitraryGroupHandler:
-    """
-    A class for working with groups given a sub : super group dict
-    """
-
-    def __init__(self, id_combiner: IdCombiner):
-        self.id_combiner: IdCombiner = id_combiner
-
-    def make_subgroups(
-        self,
-        sub_super: Iterable[tuple[Hashable, Hashable]],
-        supergroup_varname: str,
-        subgroup_varname: str,
-    ) -> list[Group]:
+class RaggedOuterProductSubgroupHandler(ABC):
+    def construct_group_map(self, **kwargs) -> GroupMap:
         """
-        Make empty (attribute-less) subgroups.
+        Uses a Sequence of Sequences of Hashables to construct a GroupMap. Each inner Sequence
+        defines, in order, the category in each variable that defines a group. The last variable
+        is taken to be the one which defines the supergroup.
 
-        See construct_group_map kwargs for parameter details
+        E.g [["low risk", "child"], ["high risk", "child"], ["low risk", "adult"],]
+        defines two supergroups, "child" and "adult", and three subgroups,
+        "low risk child", "high risk child", and "low risk adult".
+
+        If provided, a second Sequence (`"variable_names"`) of the names of the variables is used
+        when populating the group attributes.
         """
-        return [
-            Group(
-                name=self.id_combiner.combine(supercat, subcat),
-                attributes=[
-                    Attribute(
-                        value=supercat,
-                        name=supergroup_varname,
-                        impute_action="ignore",
-                    ),
-                    Attribute(
-                        value=subcat,
-                        name=subgroup_varname,
-                        impute_action="ignore",
-                    ),
-                ],
+        assert "category_combinations" in kwargs
+        cat_combs = kwargs.get("category_combinations")
+
+        assert isinstance(cat_combs, Sequence)
+        lens = []
+        for cat_comb in cat_combs:
+            assert_hashable_sequence(cat_comb)
+            lens.append(len(cat_comb))
+        nvar = lens[0]
+        assert all(len == nvar for len in lens)
+
+        subgroups = [tuple(cat_comb) for cat_comb in cat_combs]
+        supergroups = [cat_comb[-1] for cat_comb in cat_combs]
+
+        group_map = GroupMap(
+            sub_to_super={
+                subgrp: supergrp
+                for subgrp, supergrp in zip(subgroups, supergroups)
+            },
+            groups=None,
+        )
+
+        if "variable_names" in kwargs:
+            variable_names = kwargs.get("variable_names")
+            assert isinstance(variable_names, Sequence)
+            assert len(variable_names) == nvar
+            assert all(
+                isinstance(var_name, str) for var_name in variable_names
             )
-            for subcat, supercat in sub_super
-        ]
+        else:
+            variable_names = [f"variable_{i}" for i in range(nvar)]
 
-    def make_supergroups(
-        self,
-        sub_super: Iterable[tuple[Hashable, Hashable]],
-        supergroup_varname: str,
-    ) -> list[Group]:
-        """
-        Make empty (attribute-less) supergroups.
+        group_map.add_attribute(
+            group_type="supergroup",
+            attribute_name=variable_names[-1],
+            attribute_values={supergrp: supergrp for supergrp in supergroups},
+            impute_action="ignore",
+            attribute_class=Attribute,
+            measurement_type=None,
+        )
 
-        See construct_group_map kwargs for parameter details
-        """
-        supergroup_cats = set(sub_sup[1] for sub_sup in sub_super)
-        return [
-            Group(
-                name=supercat,
-                attributes=[
-                    Attribute(
-                        value=supercat,
-                        name=supergroup_varname,
-                        impute_action="ignore",
-                    )
-                ],
+        for varname, cats in zip(variable_names, zip(*cat_combs)):
+            group_map.add_attribute(
+                group_type="subgroup",
+                attribute_name=varname,
+                attribute_values={
+                    subgrp: cat for subgrp, cat in zip(subgroups, cats)
+                },
+                impute_action="ignore",
+                attribute_class=Attribute,
+                measurement_type=None,
             )
-            for supercat in supergroup_cats
-        ]
 
-    def construct_group_map(
-        self,
-        **kwargs,
-    ) -> GroupMap:
-        """
-        Constructs a GroupMap from all subgroups defined by the categories of subgroup
-        and supergroup variables.
-
-        Parameters
-        ----------
-        sub_super: Iterable[tuple[Hashable, Hashable]]
-            Each element is a pair defining a subgroup via the category of both
-            the subgrouping and supergrouping variables. For example,
-            ("low", "0-17") could define a group of low-risk, 0-17 year olds, which
-            is a subgroup of 0-17 year olds based on risk.
-        supergroup_varname: str
-            What is the variable that defines the supergroup?
-        supergroup_varname: str
-            What is the variable that defines the subgroup?
-        """
-        assert "sub_super" in kwargs and isinstance(
-            kwargs.get("sub_super"), Iterable
-        )
-        assert "supergroup_varname" in kwargs and isinstance(
-            kwargs.get("supergroup_varname"), str
-        )
-        assert "subgroup_varname" in kwargs and isinstance(
-            kwargs.get("subgroup_varname"), str
-        )
-
-        sub_super: Iterable[tuple[Hashable, Hashable]] = kwargs.get(
-            "sub_super"
-        )  # type: ignore
-        supergroup_varname: str = kwargs.get("supergroup_varname")  # type: ignore
-        subgroup_varname: str = kwargs.get("subgroup_varname")  # type: ignore
-
-        groups = self.make_supergroups(
-            sub_super, supergroup_varname
-        ) + self.make_subgroups(
-            sub_super, supergroup_varname, subgroup_varname
-        )
-
-        sub_to_super = {
-            self.id_combiner.combine(supergrp, subgrp): supergrp
-            for subgrp, supergrp in sub_super
-        }
-
-        return GroupMap(sub_to_super, groups)
+        return group_map
 
 
 class OuterProductSubgroupHandler:
@@ -170,41 +126,64 @@ class OuterProductSubgroupHandler:
         self,
         **kwargs,
     ) -> GroupMap:
-        assert "subgroups" in kwargs and isinstance(
-            kwargs.get("subgroups"), Iterable
-        )
-        assert "supergroups" in kwargs and isinstance(
-            kwargs.get("supergroups"), Iterable
-        )
+        """
+        Constructs a GroupMap from all subgroups defined by the categories of subgroup
+        and supergroup variables.
 
-        supergroups: Iterable[Hashable] = kwargs.get("supergroups")  # type: ignore
-        subgroups: Iterable[Hashable] = kwargs.get("subgroups")  # type: ignore
-        assert all(isinstance(sg, Hashable) for sg in supergroups)
-        assert all(isinstance(sg, Hashable) for sg in subgroups)
+        Parameters
+        ----------
+        supergroup_categories: Sequence[Hashable]
+            The catgegories of the variable defining the supergroups.
+        subgroup_categories: Sequence[Sequence[Hashable]]
+            For each variable defining subgroups, the catgegories it can take.
+        supergroup_variable_name: str
+            What is the variable that defines the supergroup?
+        subgroup_variable_names: Sequence[str]
+            What are the variables that defines the subgroups?
+        """
+        assert "supergroup_categories" in kwargs
+        super_cats: Sequence[Hashable] = kwargs.get("supergroup_categories")  # type: ignore
+        assert_hashable_sequence(super_cats)
 
-        id_combiner = kwargs.get("id_combiner", StringPaster())
-        pairs = [
-            (
-                subgrp,
-                supergrp,
+        assert "subgroup_categories" in kwargs
+        sub_cats: Sequence[Sequence[Hashable]] = kwargs.get(
+            "subgroup_categories"
+        )  # type: ignore
+        assert isinstance(sub_cats, Sequence)
+        for sc in sub_cats:
+            assert_hashable_sequence(sc)
+
+        sub_super = itertools.product(*[*sub_cats, list(super_cats)])
+
+        supergroup_varname = kwargs.get(
+            "supergroup_variable_name", "supergroup_variable"
+        )
+        if "subgroup_variable_names" in kwargs:
+            subgroup_variable_names = kwargs.get("subgroup_variable_names")
+            assert isinstance(subgroup_variable_names, Sequence)
+            assert len(subgroup_variable_names) == len(sub_cats)
+            assert all(
+                isinstance(var_name, str)
+                for var_name in subgroup_variable_names
             )
-            for subgrp in subgroups
-            for supergrp in supergroups
-        ]
+        else:
+            subgroup_variable_names = [
+                f"subgroup_variable_{i}" for i in range(len(sub_cats))
+            ]
 
-        return ArbitraryGroupHandler(
-            id_combiner=id_combiner
-        ).construct_group_map(sub_super=pairs, **kwargs)
+        return RaggedOuterProductSubgroupHandler().construct_group_map(
+            category_combinations=list(sub_super),
+            variable_names=list(subgroup_variable_names)
+            + [supergroup_varname],
+        )
 
 
-# @TODO: Needs more static methods
 class AgeGroupHandler:
     """
     A class for working with age groups.
 
     Implements:
         cfa_subgroup_imputer.enumerator.Mapper
-        cfa_subgroup_imputer.polars.FilterConstructor
     """
 
     STR_AGE_RANGE_CONVERTERS = (

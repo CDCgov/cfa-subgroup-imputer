@@ -151,14 +151,26 @@ class TestAgeGroups:
 
 class TestCategoroical:
     def test_constructor(self):
-        supergroups = ["festina", "festimus materia"]
-        subgroups = ["lente", "velociter"]
+        supergroup_cats = ["festina", "festimus materia"]
+        subgroup_cats = [["lente", "velociter"]]
 
         map_expected = {
-            "festina_lente": "festina",
-            "festina_velociter": "festina",
-            "festimus materia_lente": "festimus materia",
-            "festimus materia_velociter": "festimus materia",
+            (
+                "lente",
+                "festina",
+            ): "festina",
+            (
+                "velociter",
+                "festina",
+            ): "festina",
+            (
+                "lente",
+                "festimus materia",
+            ): "festimus materia",
+            (
+                "velociter",
+                "festimus materia",
+            ): "festimus materia",
         }
 
         groups_expected = {
@@ -182,8 +194,8 @@ class TestCategoroical:
                     ),
                 ],
             ),
-            "festina_lente": Group(
-                name="festina_lente",
+            ("lente", "festina"): Group(
+                name=("lente", "festina"),
                 attributes=[
                     Attribute(
                         value="lente",
@@ -197,8 +209,8 @@ class TestCategoroical:
                     ),
                 ],
             ),
-            "festina_velociter": Group(
-                name="festina_velociter",
+            ("velociter", "festina"): Group(
+                name=("velociter", "festina"),
                 attributes=[
                     Attribute(
                         value="velociter",
@@ -212,8 +224,8 @@ class TestCategoroical:
                     ),
                 ],
             ),
-            "festimus materia_lente": Group(
-                name="festimus materia_lente",
+            ("lente", "festimus materia"): Group(
+                name=("lente", "festimus materia"),
                 attributes=[
                     Attribute(
                         value="lente",
@@ -227,8 +239,8 @@ class TestCategoroical:
                     ),
                 ],
             ),
-            "festimus materia_velociter": Group(
-                name="festimus materia_velociter",
+            ("velociter", "festimus materia"): Group(
+                name=("velociter", "festimus materia"),
                 attributes=[
                     Attribute(
                         value="velociter",
@@ -245,10 +257,10 @@ class TestCategoroical:
         }
 
         group_map = OuterProductSubgroupHandler().construct_group_map(
-            supergroups=supergroups,
-            subgroups=subgroups,
-            supergroup_varname="phrase",
-            subgroup_varname="speed",
+            supergroup_categories=supergroup_cats,
+            subgroup_categories=subgroup_cats,
+            supergroup_variable_name="phrase",
+            subgroup_variable_names=["speed"],
         )
 
         assert group_map.groups == groups_expected

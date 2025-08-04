@@ -16,26 +16,27 @@ If you see something you think is wrong, bad, or unwise, open a PR with an expla
 For our purposes, a group is an arbitrary subpopulation (possibly the entire population).
 In particular, we are thinking about groups of people, so while the mathematical presentation is general, the scope may in practice be somewhat more restricted.
 A group becomes a subgroup or supergroup only in relation to other groups.
-That is, 10 year olds is both a subgroup of children under 18, and a supergroup of children aged 10 years and 0 months, 10 years and 1 month, and so on.
+In particular, subgroups and supergroups are important for [tracking the flow of data](#aggregating-and-disaggregating).
+
 
 We will assume that subgroups provided comprise the entire supergroup.
-That is, that there won't be a supergroup of children under 18 with subgroups 1-3 year olds, 4-11 year olds, and 12-17 year olds, as this is missing infants less than one year old.
+That is, that there won't be a supergroup of children under 18 with subgroups 1-11 year olds, and 12-17 year olds, as this is missing infants less than one year old.
 🚧 We will provide some functionality for filling these groups in, under simple assumptions, and regardless of such padding, validating completeness.
 
 ### Aggregating and disaggregating
 
-The primary use of `cfa-subgroup-imputer` is _disaggregation_.
-We have values for some supergroup, such as counts of vaccine doses in children under age 18, and we want to have values for subgroups thereof.
-Generally we will want to disaggregate multiple supergroups simultaneously, such as moving from one set of groups to another, which is supported by the package.
-🚧 The package will support disaggregating many variables simultaneously.
+_Disaggregation_ is the process of taking information provided for supergroups and distributing it to subgroups.
+_Aggregation_ is the reverse, the process of taking information provided for subgroups and consolidating it to supergroups.
+How information is handled in aggregation or disaggregation depends on the [type of data](#data).
 
-🚧 The package will eventually also support _aggregation_.
-In this case, we combine measurements for subgroups into a supergroup.
+The package provides support for simultaneously handling multiple supergroups, e.g. disaggregating data on the (super)groups 0-18 years, 18-64 years, 65+ years to yearly age groups.
+
+🚧 Aggregation is not yet supported.
 
 ### Data
 
 Groups may have arbitrary forms of data associated with them,
-However, as stated, the focus of this package is on disaggregating values which reflect in one some sense, in form or another, actual counts in groups.
+However, as stated, the focus of this package is on disaggregating values which reflect in one some sense, in some form or another, actual counts in groups.
 Handling of other values is done much more simply.
 
 We formalize this with a class hierarchy.
@@ -48,7 +49,7 @@ We formalize this with a class hierarchy.
 - An `ImputableAttribute` is a special case where:
   - The `value` is numeric and nonnegative.
   - The `impute_action` can additionally be `"impute"` specifying that this value should be disaggregated.
-  - A `MeasurementType` is specified, tracking whether this is a rate-like or count-like quantity. This is discussed more [below](#imputable-values).
+  - A `MeasurementType` is specified, tracking whether this is a [rate-like or count-like quantity](#imputable-values).
 
 🚧 Add examples of when to copy, ignore, or impute.
 

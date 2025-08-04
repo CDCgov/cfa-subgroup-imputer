@@ -9,9 +9,8 @@ import polars as pl
 from cfa_subgroup_imputer.groups import GroupMap
 from cfa_subgroup_imputer.mapping import (
     AgeGroupHandler,
-    ArbitraryGroupHandler,
     OuterProductSubgroupHandler,
-    StringPaster,
+    RaggedOuterProductSubgroupHandler,
 )
 from cfa_subgroup_imputer.variables import GroupableTypes
 
@@ -30,12 +29,9 @@ def create_group_map(
             (row_dict[subgroups_from], row_dict[supergroups_from])
             for row_dict in subgroup_to_supergroup.to_dicts()
         ]
-        return ArbitraryGroupHandler(
-            id_combiner=StringPaster()
-        ).construct_group_map(
-            sub_super=sub_super_pairs,
-            supergroup_varname=supergroups_from,
-            subgroup_varname=subgroups_from,
+        return RaggedOuterProductSubgroupHandler().construct_group_map(
+            category_combinations=sub_super_pairs,
+            variable_names=[subgroups_from, supergroups_from],
         )
 
     assert supergroup_df is not None, (

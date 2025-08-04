@@ -5,7 +5,7 @@ from cfa_subgroup_imputer.polars import create_group_map
 from cfa_subgroup_imputer.variables import Attribute
 
 
-def test_arbitrary_groups():
+def test_groups_from_df():
     state_counties = pl.DataFrame(
         {
             "state": [
@@ -27,9 +27,9 @@ def test_arbitrary_groups():
     )
 
     map_expected = {
-        "California_Sutter": "California",
-        "Washington_Skagit": "Washington",
-        "Washington_San Juan": "Washington",
+        ("Sutter", "California"): "California",
+        ("Skagit", "Washington"): "Washington",
+        ("San Juan", "Washington"): "Washington",
     }
 
     groups_expected = {
@@ -53,8 +53,8 @@ def test_arbitrary_groups():
                 ),
             ],
         ),
-        "California_Sutter": Group(
-            name="California_Sutter",
+        ("Sutter", "California"): Group(
+            name=("Sutter", "California"),
             attributes=[
                 Attribute(
                     value="Sutter",
@@ -68,8 +68,8 @@ def test_arbitrary_groups():
                 ),
             ],
         ),
-        "Washington_Skagit": Group(
-            name="Washington_Skagit",
+        ("Skagit", "Washington"): Group(
+            name=("Skagit", "Washington"),
             attributes=[
                 Attribute(
                     value="Skagit",
@@ -83,8 +83,8 @@ def test_arbitrary_groups():
                 ),
             ],
         ),
-        "Washington_San Juan": Group(
-            name="Washington_San Juan",
+        ("San Juan", "Washington"): Group(
+            name=("San Juan", "Washington"),
             attributes=[
                 Attribute(
                     value="San Juan",
