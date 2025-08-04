@@ -2,6 +2,7 @@
 Submodule for broad-sense handling of supergroups and subgroups.
 """
 
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import Hashable, Literal, Self, get_args
 
@@ -186,6 +187,7 @@ class GroupMap:
             group_names = set(sub_to_super.values()).union(sub_to_super.keys())
             groups = [Group(name) for name in group_names]
         self.groups = {group.name: group for group in groups}
+        self._validate()
 
     @classmethod
     def from_supergroups(
@@ -198,6 +200,28 @@ class GroupMap:
         """
         sub_to_super = GroupMap.make_many_to_one(super_to_sub)
         return cls(sub_to_super, groups)
+
+    def _validate(self):
+        # Groups in mapping are in self.groups
+        for group in self.sub_to_super.keys():
+            assert group in self.groups, (
+                f"Subgroup {group} is present in self.sub_to_super but not in self.groups"
+            )
+        for group in set(self.sub_to_super.values()):
+            assert group in self.groups, (
+                f"Supergroup {group} is present in self.sub_to_super but not in self.groups"
+            )
+        # Groups in self.groups are in mapping
+        for group in self.groups.keys():
+            in_sub = group in self.sub_to_super.keys()
+            in_super = group in self.sub_to_super.values()
+            assert in_sub or in_super, (
+                f"Group {group} is present in self.groups but not in self.sub_to_super"
+            )
+            if in_sub and in_super:
+                assert Counter(self.sub_to_super.items())[group] == 1, (
+                    "Group is both a supergroup and a subgroup but is not 1:1."
+                )
 
     def add_attribute(
         self,
