@@ -16,26 +16,27 @@ If you see something you think is wrong, bad, or unwise, open a PR with an expla
 For our purposes, a group is an arbitrary subpopulation (possibly the entire population).
 In particular, we are thinking about groups of people, so while the mathematical presentation is general, the scope may in practice be somewhat more restricted.
 A group becomes a subgroup or supergroup only in relation to other groups.
-That is, 10 year olds is both a subgroup of children under 18, and a supergroup of children aged 10 years and 0 months, 10 years and 1 month, ans so on.
+In particular, subgroups and supergroups are important for [tracking the flow of data](#aggregating-and-disaggregating).
+
 
 We will assume that subgroups provided comprise the entire supergroup.
-That is, that there won't be a supergroup of children under 18 with subgroups 1-3 year olds, 4-11 year olds, and 12-17 year olds, as this is missing infants less than one year old.
+That is, that there won't be a supergroup of children under 18 with subgroups 1-11 year olds, and 12-17 year olds, as this is missing infants less than one year old.
 🚧 We will provide some functionality for filling these groups in, under simple assumptions, and regardless of such padding, validating completeness.
 
 ### Aggregating and disaggregating
 
-The primary use of `cfa-subgroup-imputer` is _disaggregation_.
-We have values for some supergroup, such as counts of vaccine doses in children under age 18, and we want to have values for subgroups thereof.
-Generally we will want to disaggregate multiple supergroups simultaneously, such as moving from one set of groups to another, which is supported by the package.
-The package supports disaggregating many variables simultaneously.
+_Disaggregation_ is the process of taking information provided for supergroups and distributing it to subgroups.
+_Aggregation_ is the reverse, the process of taking information provided for subgroups and consolidating it to supergroups.
+How information is handled in aggregation or disaggregation depends on the [type of data](#data).
 
-The package will eventually also support _aggregation_.
-In this case, we combine measurements for subgroups into a supergroup.
+The package provides support for simultaneously handling multiple supergroups, e.g. disaggregating data on the (super)groups 0-18 years, 18-64 years, 65+ years to yearly age groups.
+
+🚧 Aggregation is not yet supported.
 
 ### Data
 
 Groups may have arbitrary forms of data associated with them,
-However, as stated, the focus of this package is on disaggregating values which reflect in one some sense, in form or another, actual counts in groups.
+However, as stated, the focus of this package is on disaggregating values which reflect in one some sense, in some form or another, actual counts in groups.
 Handling of other values is done much more simply.
 
 We formalize this with a class hierarchy.
@@ -48,7 +49,9 @@ We formalize this with a class hierarchy.
 - An `ImputableAttribute` is a special case where:
   - The `value` is numeric and nonnegative.
   - The `impute_action` can additionally be `"impute"` specifying that this value should be disaggregated.
-  - A `MeasurementType` is specified, tracking whether this is a rate-like or count-like quantity. This is discussed more [below](#imputable-values).
+  - A `MeasurementType` is specified, tracking whether this is a [rate-like or count-like quantity](#imputable-values).
+
+🚧 Add examples of when to copy, ignore, or impute.
 
 #### Imputable values
 
@@ -62,26 +65,26 @@ Quantities that fall into this category are:
 - Counts of vaccinated individuals.
 
 A rate-like attribute refers to a _per-capita_ rate, and as such it can be disaggregated if the size of the group is available.
-Then, rate-like attributes are first transformed into count-like measurements by scaling by the appropriate variable in the supergroup (usually, supergroup size), splitting that quantity proportionately, and finally re-scaling by the variable's value in the subgroup.
+Rate-like attributes are first transformed into count-like measurements by scaling by the appropriate variable in the supergroup (usually, supergroup size), splitting that quantity proportionately, and finally re-scaling by the variable's value in the subgroup.
 Quantities that fall into this category are:
 - Per-capita hospitalization, infection, or case rates.
 - Proportions of a population vaccinated.
-- The proportion of a population successfully protected via immunization.
-- $R$, as it is the number of secondary infections per primary infection. The same disclaimer as with wastewater concentrations applies.
+- The proportion of a population successfully protected via immunization (though this is, in practice, less likely to be homogenous).
+- $R$, as it is the number of secondary infections per primary infection. The same disclaimer as with wastewater concentrations applies. Note that if disaggregating purely on size, the homogeneity assumption amounts to assuming that the same proportion of each subgroup is infected.
 
 Examples of things this package is unsuitable for disaggregating:
 - Concentration parameters (e.g., for negative binomial models), standard deviations, and most other dispersion parameters. (Variances are additive, so variances of something summed over subgroups could be split if strong assumptions about covariances are made.)
-- (Contact) networks, DAGS, or other graphs. These aren't things to which a notion of apportioning applies.
+- Contact (or other) networks, DAGS, or other graphs. These aren't things to which a notion of apportioning applies.
 
-### Dis/aggregation versus enumeration
+### Dis/aggregation versus mapping
 
 There are two related problems when handling subgroups and supergroups.
-The first of these is _enumeration_.
-Only after subgroups have been enumerated can supergroups be disaggregated, or aggregated.
+The first of these is _mapping_.
+Only after subgroups have been mapped can supergroups be disaggregated, or aggregated.
 
 
 To take age groups as an example, consider that we have measurements for supergroups "0-3 years", "4-11 years", and "12-17 years", and that we want to impute measurements on yearly age subgroups.
-Enumeration is the process of specifying that the subgroup to supergroup map is:
+Mapping is the process of specifying that the subgroup to supergroup map is:
 ```python
 sub_to_super = {
     "0 years" : "0-3 years",
@@ -105,9 +108,11 @@ sub_to_super = {
 }
 ```
 
-The package offers built-in enumeration support to handle:
-- Supergroups and subgroups defined by age (`AgeGroupEnumerator`)
-- Arbitrary subgroups present in all supergroups (`CartesianEnumerator`)
+Both subgroups and supergroups are defined by values of some _variable_.
+The package provides support for automatically creating mappings for:
+1. Age groups, via the `AgeGroupHandler`, in which both subgroups and supergroups are defined by age.
+2. Subgroups which are defined by a categorical random variable which is _distinct_ from the one defines supergroups, and for which all levels are present in all supergroups, via the `OuterProductHandler`. For example, stratifying regional supergroups by vaccination status, where the supergroups are defined by region, and subgroups are defined by the vaccination status _and_ region.
+3. Case 2. except that not all subgroup categories are present in all supergroup categories. For example, if the supergroups are states and the subgroups are counties. In this case, all pairs of subgroup and supergroup categories needed must be provided.
 
 
 ## What is subgroup disaggregation anyways?

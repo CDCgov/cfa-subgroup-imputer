@@ -2,7 +2,14 @@
 Submodule for handling variables, whether measurements or quantities used to define subgroups.
 """
 
-from typing import Any, Hashable, Literal, NamedTuple, Self, get_args
+from collections.abc import Iterable
+from typing import (
+    Any,
+    Hashable,
+    Literal,
+    Self,
+    get_args,
+)
 
 MassMeasurementType = Literal["mass", "mass_from_density"]
 DensityMeasurementType = Literal["density", "density_from_mass"]
@@ -54,7 +61,18 @@ class Attribute:
         self.impute_action: ImputeAction = impute_action
         self._validate()
 
+    def __eq__(self, x):
+        return (
+            self.name == x.name
+            and self.value == x.value
+            and self.impute_action == x.impute_action
+        )
+
+    def __repr__(self):
+        return f"Attribute(name={self.name}, impute_action={self.impute_action}, value={self.value})"
+
     def _validate(self):
+        assert isinstance(self.name, Hashable)
         # Can't impute the base class
         assert self.impute_action in ["copy", "ignore"]
 
@@ -94,6 +112,9 @@ class ImputableAttribute(Attribute):
     def _validate(self):
         assert self.impute_action in get_args(ImputeAction)
 
+    def __eq__(self, x):
+        return super().__eq__() and self.measurement_type == x.measurement_type
+
     def __mul__(self, k: float) -> Self:
         return type(self)(
             value=self.value * k,
@@ -119,7 +140,7 @@ class ImputableAttribute(Attribute):
         )
 
 
-class Range(NamedTuple):
+class Range:
     """
     A slice of a one-dimensional variable. e.g. [0, 3.14159).
 
@@ -135,26 +156,62 @@ class Range(NamedTuple):
         Is the range inclusive of the upper value?
     """
 
-    lower: float
-    lower_included: bool
-    upper: float
-    upper_included: bool
+    def __init__(
+        self,
+        lower: float,
+        upper: float,
+    ):
+        self.lower: float = lower
+        self.upper: float = upper
+
+    def __add__(self, x: Self) -> Self:
+        # @TODO: should this be less exact?
+        assert self.upper == x.lower
+        return type(self)(lower=self.lower, upper=x.upper)
+
+    def __contains__(self, x: Self):
+        return x.lower >= self.lower and x.upper <= self.upper
+
+    def __gt__(self, x: Self):
+        return self.lower >= x.upper
+
+    def __hash__(self):
+        return self.to_tuple().__hash__()
+
+    def __lt__(self, x: Self):
+        return self.upper <= x.lower
+
+    def __eq__(self, x: Self):
+        return self.lower == x.lower and self.upper == x.upper
+
+    def __repr__(self):
+        return f"Range({self.lower},{self.upper})"
+
+    @classmethod
+    def from_tuple(cls, low_high: tuple[float, float]):
+        return cls(low_high[0], low_high[1])
+
+    def to_tuple(self) -> tuple[float, float]:
+        return (self.lower, self.upper)
 
 
-GroupableTypes = Literal["Categorical", "Continuous"]
-
-
-class GroupingVariable(NamedTuple):
+def assert_range_spanned_exactly(
+    range: Range, ranges: Iterable[Range]
+) -> None:
     """
-    A class for holding variables that can define subgroups
+    Checks that the provided `ranges`, in aggregate, span exactly `range`.
 
-    Parameters
-    name: str
-        The name of the variable.
-    type: GroupableTypes
-        The type of variable.
-    ----------
+    [Range(0., 1.), Range(1., 10.)] span Range(0., 10.)
+    [Range(0., 1.), Range(1., 10.1)] does not span Range(0., 10.)
+    [Range(0., 1.), Range(2., 10.)] does not span Range(0., 10.)
     """
+    ranges = sorted(ranges)
+    lower = range.lower
+    assert ranges[0].lower == lower
+    cumulative = ranges[0]
+    for r in ranges[1:]:
+        cumulative += r
+    assert cumulative.upper == range.upper
 
-    name: str
-    type: GroupableTypes
+
+GroupableTypes = Literal["categorical", "age"]
