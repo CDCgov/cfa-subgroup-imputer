@@ -1,107 +1,124 @@
-# import pytest
-# from cfa_subgroup_imputer.groups import Group, GroupMap
-# from cfa_subgroup_imputer.variables import Attribute, ImputableAttribute
-# from cfa_subgroup_imputer.imputer import (
-#     Disaggregator,
-#     ProportionsFromCategories,
-# )
-# from cfa_subgroup_imputer.mapping import OuterProductSubgroupHandler
+from cfa_subgroup_imputer.imputer import (
+    Disaggregator,
+    ProportionsFromCategories,
+)
+from cfa_subgroup_imputer.mapping import OuterProductSubgroupHandler
+from cfa_subgroup_imputer.variables import (
+    Attribute,
+    ImputableAttribute,
+)
 
 
-# def test_disaggregator_outer_product():
-#     # Define two supergroups and three subgroups
-#     supergroups = ["A", "B"]
-#     subgroups = ["x", "y", "z"]
-#     # Assign sizes to each subgroup within each supergroup
-#     subgroup_sizes = {
-#         ("A", "x"): 10,
-#         ("A", "y"): 20,
-#         ("A", "z"): 30,
-#         ("B", "x"): 40,
-#         ("B", "y"): 50,
-#         ("B", "z"): 60,
-#     }
-#     supergroup_sizes = {
-#         "A": sum(subgroup_sizes[("A", s)] for s in subgroups),
-#         "B": sum(subgroup_sizes[("B", s)] for s in subgroups),
-#     }
+def test_disaggregator_outer_product():
+    supergroup_categories = ["Region1", "Region2"]
+    subgroup_categories = [["Low", "High"]]
+    supergroup_variable_name = "region"
+    subgroup_variable_names = ["income"]
 
-#     # Build group map using OuterProductSubgroupHandler
-#     handler = OuterProductSubgroupHandler()
-#     group_map = handler.construct_group_map(
-#         supergroups=supergroups,
-#         subgroups=subgroups,
-#         supergroup_varname="region",
-#         subgroup_varname="category",
-#     )
+    handler = OuterProductSubgroupHandler()
+    group_map = handler.construct_group_map(
+        supergroup_categories=supergroup_categories,
+        subgroup_categories=subgroup_categories,
+        supergroup_variable_name=supergroup_variable_name,
+        subgroup_variable_names=subgroup_variable_names,
+    )
 
-#     # Add size attributes to groups
-#     groups = []
-#     for group in group_map.groups.values():
-#         if group.name in supergroups:
-#             # Supergroup
-#             groups.append(
-#                 Group(
-#                     name=group.name,
-#                     attributes=[
-#                         Attribute(
-#                             value=group.name,
-#                             name="region",
-#                             impute_action="ignore",
-#                         ),
-#                         Attribute(
-#                             value=supergroup_sizes[group.name],
-#                             name="size",
-#                             impute_action="ignore",
-#                         ),
-#                     ],
-#                 )
-#             )
-#         else:
-#             # Subgroup
-#             region = group.get_attribute("region").value
-#             category = group.get_attribute("category").value
-#             groups.append(
-#                 Group(
-#                     name=group.name,
-#                     attributes=[
-#                         Attribute(
-#                             value=region, name="region", impute_action="ignore"
-#                         ),
-#                         Attribute(
-#                             value=category,
-#                             name="category",
-#                             impute_action="ignore",
-#                         ),
-#                         Attribute(
-#                             value=subgroup_sizes[(region, category)],
-#                             name="size",
-#                             impute_action="ignore",
-#                         ),
-#                     ],
-#                 )
-#             )
-#     group_map = GroupMap(group_map.sub_to_super, groups)
+    supergroup_sizes = {"Region1": 100, "Region2": 200}
+    group_map.add_attribute(
+        group_type="supergroup",
+        attribute_name="size",
+        attribute_values=supergroup_sizes,
+        impute_action="ignore",
+        attribute_class=Attribute,
+    )
 
-#     # Mark group map as disaggregatable by monkeypatching if needed
-#     # (Assume for this test that disaggregatable is not implemented)
-#     group_map.disaggregatable = True
+    subgroup_sizes = {
+        ("Low", "Region1"): 40,
+        ("High", "Region1"): 60,
+        ("Low", "Region2"): 80,
+        ("High", "Region2"): 120,
+    }
+    group_map.add_attribute(
+        group_type="subgroup",
+        attribute_name="size",
+        attribute_values=subgroup_sizes,
+        impute_action="ignore",
+        attribute_class=Attribute,
+    )
 
-#     # Run Disaggregator
-#     disagg = Disaggregator(ProportionsFromCategories(size_from="size"))
-#     result = disagg(group_map)
+    cases_super = {"Region1": 10, "Region2": 50}
+    group_map.add_attribute(
+        group_type="supergroup",
+        attribute_name="cases",
+        attribute_values=cases_super,
+        impute_action="impute",
+        attribute_class=ImputableAttribute,
+        measurement_type="count",
+    )
 
-#     # Check that each subgroup in result has the correct size
-#     for supergroup in supergroups:
-#         total = 0
-#         for subgroup in subgroups:
-#             name = f"{supergroup}_{subgroup}"
-#             g = result.group(name)
-#             size = g.get_attribute("size").value
-#             assert size == pytest.approx(
-#                 subgroup_sizes[(supergroup, subgroup)]
-#             )
-#             total += size
-#         # Supergroup size should match sum of subgroups
-#         super_size = result.group(supergroup).get_attribute("size").value
-#         assert super_size == pytest.approx(total)
+    vax_rate_super = {"Region1": 0.5, "Region2": 0.8}
+    group_map.add_attribute(
+        group_type="supergroup",
+        attribute_name="vaccination_rate",
+        attribute_values=vax_rate_super,
+        impute_action="impute",
+        attribute_class=ImputableAttribute,
+        measurement_type="rate",
+    )
+
+    collection_date_super = {"Region1": "2024-01-01", "Region2": "2024-01-02"}
+    group_map.add_attribute(
+        group_type="supergroup",
+        attribute_name="collection_date",
+        attribute_values=collection_date_super,
+        impute_action="copy",
+        attribute_class=Attribute,
+    )
+
+    notes_super = {"Region1": "foo", "Region2": "bar"}
+    group_map.add_attribute(
+        group_type="supergroup",
+        attribute_name="notes",
+        attribute_values=notes_super,
+        impute_action="ignore",
+        attribute_class=Attribute,
+    )
+
+    disagg = Disaggregator(
+        proportion_calculator=ProportionsFromCategories(size_from="size"),
+    )
+    result = disagg(group_map)
+
+    # rate values match
+    assert result.group(("Low", "Region1")).get_attribute("cases").value == 4.0
+    assert (
+        result.group(("High", "Region1")).get_attribute("cases").value == 6.0
+    )
+    assert (
+        result.group(("Low", "Region2")).get_attribute("cases").value == 20.0
+    )
+    assert (
+        result.group(("High", "Region2")).get_attribute("cases").value == 30.0
+    )
+
+    # rate values match
+    for supergrp, val in vax_rate_super.items():
+        assert all(
+            result.group(grp_name).get_attribute("vaccination_rate").value
+            == val
+            for grp_name in result.subgroup_names(supergrp)
+        )
+
+    # copied values match
+    for supergrp, val in collection_date_super.items():
+        assert all(
+            result.group(grp_name).get_attribute("collection_date").value
+            == val
+            for grp_name in result.subgroup_names(supergrp)
+        )
+
+    # ignored values aren't in subgroups
+    assert all(
+        result.group(grp_name)._get_attribute("notes") is None
+        for grp_name in result.subgroup_names()
+    )

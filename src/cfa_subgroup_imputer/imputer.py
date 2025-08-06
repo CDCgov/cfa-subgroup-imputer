@@ -95,7 +95,6 @@ class Disaggregator:
         """
         Impute and disaggregate the given group map.
         """
-        assert map.disaggregatable
 
         sub_to_super = map.sub_to_super
         groups = []

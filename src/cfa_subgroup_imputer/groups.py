@@ -328,20 +328,13 @@ class GroupMap:
 
     def add_filters(self, group_type: GroupType, filters: Iterable[str]):
         if group_type == "subgroup":
-            group_names = self.all_sugroup_names
+            group_names = self.subgroup_names()
         elif group_type == "supergroup":
             group_names = self.supergroup_names
         else:
             raise RuntimeError(f"Unknown group type {group_type}")
         for grp_name in group_names:
             self.group(grp_name).filter_on = filters
-
-    @property
-    def aggregatable(self) -> bool:
-        """
-        We can aggregate the subgroups if we have data for all measurements in all subgroups.
-        """
-        raise NotImplementedError()
 
     def density_to_mass(self, group_type: GroupType) -> Self:
         """
@@ -363,7 +356,7 @@ class GroupMap:
         Creates a polars dataframe of the measurements in either the supergroups or subgroups.
         """
         if group_type == "subgroup":
-            group_names = self.all_sugroup_names
+            group_names = self.subgroup_names()
         elif group_type == "supergroup":
             group_names = self.supergroup_names
         else:
@@ -427,16 +420,9 @@ class GroupMap:
                 measurement_type=measurement_type,
             )
 
-    @property
-    def disaggregatable(self) -> bool:
-        """
-        We can disaggregate the supergroups if we have data for all measurements in all supergroups.
-        """
-        raise NotImplementedError()
-
     def get_filters(self, group_type: GroupType) -> Iterable[str]:
         if group_type == "subgroup":
-            group_names = self.all_sugroup_names
+            group_names = self.subgroup_names()
         elif group_type == "supergroup":
             group_names = self.supergroup_names
         else:
@@ -480,23 +466,19 @@ class GroupMap:
                 super_to_sub[v] = [k]
         return super_to_sub
 
-    def subgroup_names(self, name: Hashable) -> list[Hashable]:
+    def subgroup_names(self, name: Hashable | None = None) -> list[Hashable]:
         """
         Get names of subgroups this supergroup contains
         """
+        if name is None:
+            group_names = []
+            for supergrp in self.supergroup_names:
+                group_names = group_names + self.subgroup_names(supergrp)
+
+            return group_names
+
         assert name in self.super_to_sub.keys()
         return self.super_to_sub[name]
-
-    @property
-    def all_sugroup_names(self) -> list[Hashable]:
-        """
-        Get all supergroup names.
-        """
-        group_names = []
-        for supergrp in self.supergroup_names:
-            group_names = group_names + self.subgroup_names(supergrp)
-
-        return group_names
 
     @property
     def supergroup_names(self) -> list[Hashable]:
