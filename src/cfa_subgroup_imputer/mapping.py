@@ -108,6 +108,9 @@ class RaggedOuterProductSubgroupHandler(ABC):
                 measurement_type=None,
             )
 
+        group_map.add_filters("supergroup", [variable_names[-1]])
+        group_map.add_filters("subgroup", variable_names)
+
         return group_map
 
 
@@ -334,6 +337,9 @@ class AgeGroupHandler:
             Range(sorted_super_ranges[0].lower, sorted_super_ranges[-1].upper),
             sorted_super_ranges,
         )
+
+        grp_map.add_filters("supergroup", [age_varname])
+        grp_map.add_filters("subgroup", [age_varname])
 
         return grp_map
 

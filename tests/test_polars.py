@@ -1,11 +1,14 @@
 import polars as pl
+import pytest
+from polars.testing import assert_frame_equal
 
 from cfa_subgroup_imputer.groups import Group
 from cfa_subgroup_imputer.polars import create_group_map
 from cfa_subgroup_imputer.variables import Attribute
 
 
-def test_groups_from_df():
+@pytest.fixture
+def three_counties():
     state_counties = pl.DataFrame(
         {
             "state": [
@@ -17,7 +20,7 @@ def test_groups_from_df():
         }
     )
 
-    group_map = create_group_map(
+    return create_group_map(
         supergroup_df=None,
         subgroup_df=None,
         subgroup_to_supergroup=state_counties,
@@ -26,6 +29,8 @@ def test_groups_from_df():
         group_type=None,
     )
 
+
+def test_groups_from_df(three_counties):
     map_expected = {
         ("Sutter", "California"): "California",
         ("Skagit", "Washington"): "Washington",
@@ -100,5 +105,36 @@ def test_groups_from_df():
         ),
     }
 
-    assert group_map.groups == groups_expected
-    assert group_map.sub_to_super == map_expected
+    assert three_counties.groups == groups_expected
+    assert three_counties.sub_to_super == map_expected
+
+
+def test_data_io(three_counties):
+    state_data = pl.DataFrame(
+        {
+            "state": ["California", "Washington"],
+            "flower": [
+                "Eschscholzia californica",
+                "Rhododendron macrophyllum",
+            ],
+            "some_rate": [1.2, 1.3],
+            "some_count": [10, 20],
+            "to_exclude": ["wont", "see"],
+            "to_ignore": ["willbe", "ignored"],
+        }
+    )
+
+    three_counties.data_from_polars(
+        state_data,
+        "supergroup",
+        exclude=["to_exclude"],
+        count=["some_count"],
+        rate=["some_rate"],
+        copy=["flower"],
+    )
+
+    df = three_counties.data_to_polars("supergroup")
+
+    assert_frame_equal(
+        state_data.drop(["to_exclude"]), df, check_row_order=False
+    )
