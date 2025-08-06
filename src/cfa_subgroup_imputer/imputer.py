@@ -69,9 +69,9 @@ class ProportionsFromContinuous:
         supergroup_range = (
             group_map.group(supergroup_name).get_attribute(self.var_name).value
         )
-        assert all(isinstance(r, Range) for r in ranges) and isinstance(
-            supergroup_range, Range
-        ), (
+        assert all(
+            isinstance(r, Range) for r in ranges.values()
+        ) and isinstance(supergroup_range, Range), (
             "Cannot disaggregate continuous variables unless the attribute is a `Range` object."
         )
         assert_range_spanned_exactly(supergroup_range, ranges.values())

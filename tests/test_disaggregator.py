@@ -1,8 +1,12 @@
 from cfa_subgroup_imputer.imputer import (
     Disaggregator,
     ProportionsFromCategories,
+    ProportionsFromContinuous,
 )
-from cfa_subgroup_imputer.mapping import OuterProductSubgroupHandler
+from cfa_subgroup_imputer.mapping import (
+    AgeGroupHandler,
+    OuterProductSubgroupHandler,
+)
 from cfa_subgroup_imputer.variables import (
     Attribute,
     ImputableAttribute,
@@ -122,3 +126,50 @@ def test_disaggregator_outer_product():
         result.group(grp_name)._get_attribute("notes") is None
         for grp_name in result.subgroup_names()
     )
+
+
+def test_disaggregator_age_continuous():
+    supergroups = ["0-17 years", "18+ years"]
+    subgroups = [
+        "0-4 years",
+        "5-17 years",
+        "18-64 years",
+        "65+ years",
+    ]
+    age_max = 100
+
+    age_handler = AgeGroupHandler(age_max=age_max)
+    group_map = age_handler.construct_group_map(
+        supergroups=supergroups, subgroups=subgroups
+    )
+
+    supergroup_sizes = {"0-17 years": 1800, "18+ years": 8200}
+    group_map.add_attribute(
+        group_type="supergroup",
+        attribute_name="size",
+        attribute_values=supergroup_sizes,
+        impute_action="impute",
+        attribute_class=ImputableAttribute,
+        measurement_type="count",
+    )
+
+    # 4. Disaggregate using ProportionsFromContinuous
+    disaggregator = Disaggregator(ProportionsFromContinuous(var_name="age"))
+    result_map = disaggregator(group_map)
+
+    # 5. Verify the results
+    # Check that total size is conserved
+    total_size_before = sum(supergroup_sizes.values())
+    total_size_after = sum(
+        result_map.group(sg_name).get_attribute("size").value
+        for sg_name in result_map.supergroup_names
+    )
+    assert total_size_before == total_size_after
+
+    assert result_map.group("0-4 years").get_attribute("size").value == 500.0
+    assert result_map.group("5-17 years").get_attribute("size").value == 1300.0
+
+    assert (
+        result_map.group("18-64 years").get_attribute("size").value == 4700.0
+    )
+    assert result_map.group("65+ years").get_attribute("size").value == 3500.0
