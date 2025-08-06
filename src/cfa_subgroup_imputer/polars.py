@@ -55,6 +55,9 @@ def create_group_map(
         raise RuntimeError(f"Unknown grouping variable type {group_type}")
 
 
+# def populate_disaggregatable_data()
+
+
 def disaggregate(
     supergroup_df: pl.DataFrame,
     subgroup_df: pl.DataFrame,
