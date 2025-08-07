@@ -47,17 +47,19 @@ def create_group_map(
         "If not supplying `subgroup_to_supergroup`, must supply `subgroup_df`."
     )
 
-    supergroups = supergroup_df[supergroups_from].unique().to_list()
-    subgroups = subgroup_df[subgroups_from].unique().to_list()
+    supergroup_cats = supergroup_df[supergroups_from].unique().to_list()
+    subgroup_cats = subgroup_df[subgroups_from].unique().to_list()
     if group_type == "categorical":
         return OuterProductSubgroupHandler().construct_group_map(
-            supergroups=supergroups, subgroups=subgroups, **kwargs
+            supergroup_categories=supergroup_cats,
+            subgroup_categories=[subgroup_cats],
+            **kwargs,
         )
     elif group_type == "age":
         return AgeGroupHandler(
             age_max=kwargs.get("age_max", 100)
         ).construct_group_map(
-            supergroups=supergroups, subgroups=subgroups, **kwargs
+            supergroups=supergroup_cats, subgroups=subgroup_cats, **kwargs
         )
     else:
         raise RuntimeError(f"Unknown grouping variable type {group_type}")
@@ -119,12 +121,14 @@ def disaggregate(
     for grp_type, grp_info in {
         "supergroup": {
             "df": supergroup_df,
-            "groups_from": supergroups_from,
+            "groups_from": [supergroups_from],
             "n_groups": len(group_map.supergroup_names),
         },
         "subgroup": {
             "df": subgroup_df,
-            "groups_from": subgroups_from,
+            "groups_from": [subgroups_from] + [supergroups_from]
+            if group_type == "categorical"
+            else [],
             "n_groups": len(group_map.subgroup_names()),
         },
     }.items():
@@ -134,14 +138,15 @@ def disaggregate(
             f"Looping variables are missing from {grp_type} dataframe: {missing}"
         )
 
-        aux = safe_loop_over + [grp_info["groups_from"]]
-        for col in set(supergroup_df.columns).difference(aux):
-            assert (
-                supergroup_df.select([col] + aux).unique().shape[0]
-                == grp_info["n_groups"]
-            ), (
-                f"Column {col} in {grp_type} dataframe is not unique within {grp_type} ({grp_info['n_groups']}) and looping variable ({loop_over}) combinations."
-            )
+        assert (
+            grp_info["df"]
+            .select(safe_loop_over + grp_info["groups_from"])
+            .unique()
+            .shape[0]
+            == grp_info["df"].shape[0]
+        ), (
+            f"Dataframe has multiple entries for at least one combination of group-defining variables ({grp_info['groups_from']}) and variables to loop over ({loop_over}).\n{grp_info['df']}"
+        )
 
     # If we're not told what to do with the column, copy it
     copy = (
@@ -157,6 +162,7 @@ def disaggregate(
         subgroup_df.group_by(safe_loop_over),
     ):
         grp_map = deepcopy(group_map)
+
         grp_map.data_from_polars(
             supergroup_dfg[1],
             "supergroup",
