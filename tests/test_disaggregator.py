@@ -154,7 +154,9 @@ def test_disaggregator_age_continuous():
     )
 
     # 4. Disaggregate using ProportionsFromContinuous
-    disaggregator = Disaggregator(ProportionsFromContinuous(var_name="age"))
+    disaggregator = Disaggregator(
+        ProportionsFromContinuous(continuous_var_name="age")
+    )
     result_map = disaggregator(group_map)
 
     # 5. Verify the results
