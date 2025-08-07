@@ -336,20 +336,8 @@ class GroupMap:
         for grp_name in group_names:
             self.group(grp_name).filter_on = filters
 
-    def density_to_mass(self, group_type: GroupType) -> Self:
-        """
-        Put all density measurements in super or subgroups on mass scale for ease of downstream manipulation.
-        """
-        raise NotImplementedError()
-
     def group(self, name: Hashable) -> Group:
         return self.groups[name]
-
-    def restore_densities(self, group_type: GroupType) -> Self:
-        """
-        Undo density_to_mass for selected measurements.
-        """
-        raise NotImplementedError()
 
     def data_to_polars(self, group_type: GroupType) -> pl.DataFrame:
         """
@@ -379,7 +367,7 @@ class GroupMap:
         Populates measurements and attributes for groups found in the dataframe.
         """
         if group_type == "subgroup":
-            raise NotImplementedError()
+            group_names = self.subgroup_names()
         elif group_type == "supergroup":
             group_names = self.supergroup_names
         else:

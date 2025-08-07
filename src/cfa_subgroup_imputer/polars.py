@@ -7,7 +7,7 @@ from copy import deepcopy
 
 import polars as pl
 
-from cfa_subgroup_imputer.groups import GroupMap, GroupType
+from cfa_subgroup_imputer.groups import GroupMap
 from cfa_subgroup_imputer.imputer import (
     Disaggregator,
     ProportionsFromCategories,
@@ -28,7 +28,6 @@ def create_group_map(
     supergroups_from: str,
     subgroups_from: str,
     group_type: GroupableTypes | None,
-    ignore: Collection[str] = [],
     **kwargs,
 ) -> GroupMap:
     if subgroup_to_supergroup is not None:
@@ -64,17 +63,6 @@ def create_group_map(
         raise RuntimeError(f"Unknown grouping variable type {group_type}")
 
 
-def populate_data(
-    map: GroupMap,
-    df: pl.DataFrame,
-    group_type: GroupType,
-    ignore: Collection[str],
-) -> GroupMap:
-    _ = deepcopy(map)
-
-    raise NotImplementedError()
-
-
 def disaggregate(
     supergroup_df: pl.DataFrame,
     subgroup_df: pl.DataFrame,
@@ -83,8 +71,9 @@ def disaggregate(
     subgroups_from: str,
     group_type: GroupableTypes | None,
     loop_over: Collection[str] = [],
-    ignore: Collection[str] = [],
-    age_var_name: str | None = None,
+    rate: Collection[str] = [],
+    count: Collection[str] = [],
+    exclude: Collection[str] = [],
     **kwargs,
 ) -> pl.DataFrame:
     """
@@ -115,7 +104,6 @@ def disaggregate(
             size_from=kwargs.get("size_from", "size")
         )
     elif group_type == "age":
-        assert age_var_name is not None
         prop_calc = ProportionsFromContinuous(
             continuous_var_name=kwargs.get("continuous_var_name", "age")
         )
@@ -155,18 +143,35 @@ def disaggregate(
                 f"Column {col} in {grp_type} dataframe is not unique within {grp_type} ({grp_info['n_groups']}) and looping variable ({loop_over}) combinations."
             )
 
+    # If we're not told what to do with the column, copy it
+    copy = (
+        set(supergroup_df.columns)
+        .difference(safe_loop_over)
+        .difference(exclude)
+        .difference(rate)
+        .difference(count)
+    )
     disagg_comp = []
     for supergroup_dfg, subgroup_dfg in zip(
         supergroup_df.group_by(safe_loop_over),
         subgroup_df.group_by(safe_loop_over),
     ):
-        grp_map = populate_data(
-            populate_data(
-                group_map, supergroup_dfg[1], "supergroup", ignore=ignore
-            ),
+        grp_map = deepcopy(group_map)
+        grp_map.data_from_polars(
+            supergroup_dfg[1],
+            "supergroup",
+            copy=copy,
+            exclude=exclude,
+            count=count,
+            rate=rate,
+        )
+        grp_map.data_from_polars(
             subgroup_dfg[1],
             "subgroup",
-            ignore=ignore,
+            copy=copy,
+            exclude=exclude,
+            count=count,
+            rate=rate,
         )
 
         disagg_comp.append(disaggregator(grp_map).data_to_polars("subgroup"))
