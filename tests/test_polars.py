@@ -199,7 +199,7 @@ def test_data_io_age_groups(age_subgroups, age_group_data):
     )
 
 
-def test_disagg_ragged_categorical(state_data):
+def test_disagg_categorical(state_data):
     subgroup_df = pl.DataFrame(
         {
             "state": ["California", "California", "Washington", "Washington"],
