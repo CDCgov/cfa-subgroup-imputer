@@ -3,10 +3,16 @@ Module for polars interface.
 """
 
 from collections.abc import Collection
+from copy import deepcopy
 
 import polars as pl
 
-from cfa_subgroup_imputer.groups import GroupMap
+from cfa_subgroup_imputer.groups import GroupMap, GroupType
+from cfa_subgroup_imputer.imputer import (
+    Disaggregator,
+    ProportionsFromCategories,
+    ProportionsFromContinuous,
+)
 from cfa_subgroup_imputer.mapping import (
     AgeGroupHandler,
     OuterProductSubgroupHandler,
@@ -22,6 +28,7 @@ def create_group_map(
     supergroups_from: str,
     subgroups_from: str,
     group_type: GroupableTypes | None,
+    ignore: Collection[str] = [],
     **kwargs,
 ) -> GroupMap:
     if subgroup_to_supergroup is not None:
@@ -45,17 +52,27 @@ def create_group_map(
     subgroups = subgroup_df[subgroups_from].unique().to_list()
     if group_type == "categorical":
         return OuterProductSubgroupHandler().construct_group_map(
-            supergroups=supergroups, subgroups=subgroups
+            supergroups=supergroups, subgroups=subgroups, **kwargs
         )
     elif group_type == "age":
-        return AgeGroupHandler().construct_group_map(
-            supergroups=supergroups, subgroups=subgroups
+        return AgeGroupHandler(
+            age_max=kwargs.get("age_max", 100)
+        ).construct_group_map(
+            supergroups=supergroups, subgroups=subgroups, **kwargs
         )
     else:
         raise RuntimeError(f"Unknown grouping variable type {group_type}")
 
 
-# def populate_disaggregatable_data()
+def populate_data(
+    map: GroupMap,
+    df: pl.DataFrame,
+    group_type: GroupType,
+    ignore: Collection[str],
+) -> GroupMap:
+    _ = deepcopy(map)
+
+    raise NotImplementedError()
 
 
 def disaggregate(
@@ -66,6 +83,8 @@ def disaggregate(
     subgroups_from: str,
     group_type: GroupableTypes | None,
     loop_over: Collection[str] = [],
+    ignore: Collection[str] = [],
+    age_var_name: str | None = None,
     **kwargs,
 ) -> pl.DataFrame:
     """
@@ -81,7 +100,7 @@ def disaggregate(
         Dataframe with measurements imputed for the subgroups.
     """
 
-    _ = create_group_map(
+    group_map = create_group_map(
         supergroup_df=supergroup_df,
         subgroup_df=subgroup_df,
         subgroup_to_supergroup=subgroup_to_supergroup,
@@ -91,4 +110,65 @@ def disaggregate(
         **kwargs,
     )
 
-    raise NotImplementedError()
+    if subgroup_to_supergroup is not None or group_type == "categorical":
+        prop_calc = ProportionsFromCategories(
+            size_from=kwargs.get("size_from", "size")
+        )
+    elif group_type == "age":
+        assert age_var_name is not None
+        prop_calc = ProportionsFromContinuous(
+            continuous_var_name=kwargs.get("continuous_var_name", "age")
+        )
+    else:
+        raise RuntimeError(f"Unknown grouping variable type {group_type}")
+
+    disaggregator = Disaggregator(proportion_calculator=prop_calc)
+
+    safe_loop_over = list(loop_over) + ["dummy"]
+    supergroup_df = supergroup_df.with_columns(dummy=pl.lit("dummy"))
+    subgroup_df = subgroup_df.with_columns(dummy=pl.lit("dummy"))
+
+    for grp_type, grp_info in {
+        "supergroup": {
+            "df": supergroup_df,
+            "groups_from": supergroups_from,
+            "n_groups": len(group_map.supergroup_names),
+        },
+        "subgroup": {
+            "df": subgroup_df,
+            "groups_from": subgroups_from,
+            "n_groups": len(group_map.subgroup_names()),
+        },
+    }.items():
+        assert (
+            missing := set(safe_loop_over).difference(grp_info["df"].columns)
+        ) == set(), (
+            f"Looping variables are missing from {grp_type} dataframe: {missing}"
+        )
+
+        aux = safe_loop_over + [grp_info["groups_from"]]
+        for col in set(supergroup_df.columns).difference(aux):
+            assert (
+                supergroup_df.select([col] + aux).unique().shape[0]
+                == grp_info["n_groups"]
+            ), (
+                f"Column {col} in {grp_type} dataframe is not unique within {grp_type} ({grp_info['n_groups']}) and looping variable ({loop_over}) combinations."
+            )
+
+    disagg_comp = []
+    for supergroup_dfg, subgroup_dfg in zip(
+        supergroup_df.group_by(safe_loop_over),
+        subgroup_df.group_by(safe_loop_over),
+    ):
+        grp_map = populate_data(
+            populate_data(
+                group_map, supergroup_dfg[1], "supergroup", ignore=ignore
+            ),
+            subgroup_dfg[1],
+            "subgroup",
+            ignore=ignore,
+        )
+
+        disagg_comp.append(disaggregator(grp_map).data_to_polars("subgroup"))
+
+    return pl.concat(disagg_comp).drop("dummy")

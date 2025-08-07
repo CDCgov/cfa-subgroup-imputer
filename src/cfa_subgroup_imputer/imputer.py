@@ -56,8 +56,8 @@ class ProportionsFromCategories:
 
 
 class ProportionsFromContinuous:
-    def __init__(self, var_name: str):
-        self.var_name = var_name
+    def __init__(self, continuous_var_name: str):
+        self.var_name = continuous_var_name
 
     def calculate(
         self, supergroup_name: Hashable, group_map: GroupMap, **kwargs
