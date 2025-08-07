@@ -245,44 +245,44 @@ def test_disagg_ragged_categorical(state_data):
     )
 
 
-# def test_disagg_continuous_age(age_group_data, age_subgroups):
-#     disagg = disaggregate(
-#         supergroup_df=age_group_data,
-#         subgroup_df=age_subgroups,
-#         subgroup_to_supergroup=None,
-#         supergroups_from="age_group",
-#         subgroups_from="age_group",
-#         group_type="age",
-#         loop_over=[],
-#         rate=["vaccination_rate"],
-#         count=["cases", "size"],
-#         copy=["collection_date"],
-#         exclude=["notes", "to_exclude"],
-#     )
+def test_disagg_continuous_age(age_group_data, age_subgroups):
+    disagg = disaggregate(
+        supergroup_df=age_group_data,
+        subgroup_df=age_subgroups,
+        subgroup_to_supergroup=None,
+        supergroups_from="age_group",
+        subgroups_from="age_group",
+        group_type="age",
+        loop_over=[],
+        rate=["vaccination_rate"],
+        count=["cases", "size"],
+        copy=["collection_date"],
+        exclude=["notes", "to_exclude"],
+    )
 
-#     expected_disagg = pl.DataFrame(
-#         {
-#             "age_group": [
-#                 "0-4 years",
-#                 "5-17 years",
-#                 "18-64 years",
-#                 "65+ years",
-#             ],
-#             "size": [500.0, 1300.0, 4700.0, 3500.0],
-#             "cases": [50.0, 130.0, 470.0, 350.0],
-#             "vaccination_rate": [0.4, 0.4, 0.8, 0.8],
-#             "collection_date": [
-#                 "2024-01-01",
-#                 "2024-01-01",
-#                 "2024-01-01",
-#                 "2024-01-01",
-#             ],
-#         }
-#     )
+    expected_disagg = pl.DataFrame(
+        {
+            "age_group": [
+                "0-4 years",
+                "5-17 years",
+                "18-64 years",
+                "65+ years",
+            ],
+            "size": [500.0, 1300.0, 4700.0, 3500.0],
+            "cases": [50.0, 130.0, 470.0, 350.0],
+            "vaccination_rate": [0.4, 0.4, 0.8, 0.8],
+            "collection_date": [
+                "2024-01-01",
+                "2024-01-01",
+                "2024-01-01",
+                "2024-01-01",
+            ],
+        }
+    )
 
-#     assert_frame_equal(
-#         disagg,
-#         expected_disagg,
-#         check_row_order=False,
-#         check_column_order=False,
-#     )
+    assert_frame_equal(
+        disagg,
+        expected_disagg,
+        check_row_order=False,
+        check_column_order=False,
+    )

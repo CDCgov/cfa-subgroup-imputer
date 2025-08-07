@@ -59,6 +59,7 @@ def create_group_map(
         )
     elif group_type == "age":
         # TODO: we could rename this ourselves, instead of erroring out
+        #       though then we'd have to tweak the written output at the end too
         assert supergroups_from == subgroups_from, (
             "Age groups must be named identically in super and subgroup dataframes"
         )
@@ -116,8 +117,12 @@ def disaggregate(
             size_from=kwargs.get("size_from", "size")
         )
     elif group_type == "age":
+        # TODO: as above we could rename this ourselves
+        assert supergroups_from == subgroups_from, (
+            "Age groups must be named identically in super and subgroup dataframes"
+        )
         prop_calc = ProportionsFromContinuous(
-            continuous_var_name=kwargs.get("continuous_var_name", "age")
+            continuous_var_name=subgroups_from
         )
     else:
         raise RuntimeError(f"Unknown grouping variable type {group_type}")
