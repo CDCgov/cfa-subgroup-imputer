@@ -131,7 +131,7 @@ class Group:
         )
         filter_attributes = self.get_attributes(self.filter_on)
         this_grp = df.filter(
-            pl.col(attr.name) == attr.filter_value  # pyright: ignore[reportArgumentType]
+            pl.col(attr.name) == attr.polars_value  # pyright: ignore[reportArgumentType]
             for attr in filter_attributes
         ).drop(self.filter_on)
         if assert_unique:
@@ -200,14 +200,17 @@ class Group:
         ]
         return type(self)(name=self.name, attributes=attributes)
 
-    def to_dict(self) -> dict[Hashable, Any]:
+    def to_dict(self, use_polars_values=False) -> dict[Hashable, Any]:
         assert self.attributes, (
             f"Cannot call to_dict() on {self} which has no attributes."
         )
-        return {attr.name: attr.value for attr in self.attributes}
+        if use_polars_values:
+            return {attr.name: attr.polars_value for attr in self.attributes}
+        else:
+            return {attr.name: attr.value for attr in self.attributes}
 
     def to_polars_dict(self) -> dict[str, Any]:
-        as_dict = self.to_dict()
+        as_dict = self.to_dict(use_polars_values=True)
         assert (
             nonstr := set(
                 nm for nm in as_dict.keys() if not isinstance(nm, str)
@@ -285,7 +288,7 @@ class GroupMap:
         impute_action: ImputeAction,
         attribute_class: type[Attribute] | type[ImputableAttribute],
         measurement_type: MeasurementType | None = None,
-        attribute_filter_values: dict[Hashable, Any] | None = None,
+        attribute_polars_values: dict[Hashable, Any] | None = None,
     ):
         """
         Bulk addition of attributes to all sub or supergroups.
@@ -304,10 +307,10 @@ class GroupMap:
             The class of the attribute to be added.
         measurement_type : MeasurementType | None
             The measurement type of the attribute to be added, if it is an ImputableAttribute.
-        attribute_filter_values : dict[Hashable, object] | None
+        attribute_polars_values : dict[Hashable, object] | None
             If the `attribute_values` are not something recorded directly in a dataframe,
-            this specifies how a polars filter will be constructed to match
-            instances of this attribute. None means to use the `attribute_values`.
+            this specifies how the values will be compared against polars dataframe
+            values and how they will be exported to polars. None means to use the `attribute_values`.
         """
         if group_type == "supergroup":
             group_names = self.supergroup_names
@@ -320,8 +323,8 @@ class GroupMap:
         assert set(group_names).issubset(attribute_values.keys()), (
             f"Cannot add attribute {attribute_name} to groups {set(group_names).difference(attribute_values.keys())} which are not found in `attr_values`."
         )
-        if attribute_filter_values is not None:
-            assert set(attribute_filter_values.keys()).issubset(
+        if attribute_polars_values is not None:
+            assert set(attribute_polars_values.keys()).issubset(
                 attribute_values.keys()
             ), (
                 "If providing distinct filtering values from values, must provide one per group in `attribute_values`."
@@ -335,9 +338,9 @@ class GroupMap:
                     kwargs
                     | {
                         "value": attribute_values[group_name],
-                        "filter_value": None
-                        if attribute_filter_values is None
-                        else attribute_filter_values[group_name],
+                        "polars_value": None
+                        if attribute_polars_values is None
+                        else attribute_polars_values[group_name],
                     }
                 )
             )  # pyright: ignore[reportCallIssue]

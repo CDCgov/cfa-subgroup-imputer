@@ -318,7 +318,7 @@ class AgeGroupHandler:
             attribute_values={
                 subgrp: self.age_range_from_str(subgrp) for subgrp in subgroups
             },
-            attribute_filter_values={subgrp: subgrp for subgrp in subgroups},
+            attribute_polars_values={subgrp: subgrp for subgrp in subgroups},
             impute_action="ignore",
             attribute_class=Attribute,
         )
@@ -329,7 +329,7 @@ class AgeGroupHandler:
                 supergrp: self.age_range_from_str(supergrp)
                 for supergrp in supergroups
             },
-            attribute_filter_values={
+            attribute_polars_values={
                 supergrp: supergrp for supergrp in supergroups
             },
             impute_action="ignore",

@@ -80,7 +80,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(0, 1),
                         impute_action="ignore",
-                        filter_value="0 years",
+                        polars_value="0 years",
                     )
                 ],
             ),
@@ -91,7 +91,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(1, 2),
                         impute_action="ignore",
-                        filter_value="1-<2 years",
+                        polars_value="1-<2 years",
                     )
                 ],
             ),
@@ -102,7 +102,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(0, 6.0 / 12.0),
                         impute_action="ignore",
-                        filter_value="0-<6 months",
+                        polars_value="0-<6 months",
                     )
                 ],
             ),
@@ -113,7 +113,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(6.0 / 12.0, 1.0),
                         impute_action="ignore",
-                        filter_value="6 months-<1 year",
+                        polars_value="6 months-<1 year",
                     )
                 ],
             ),
@@ -124,7 +124,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(1, 2),
                         impute_action="ignore",
-                        filter_value="1 year",
+                        polars_value="1 year",
                     )
                 ],
             ),

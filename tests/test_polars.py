@@ -192,11 +192,11 @@ def test_data_io_age_groups(age_subgroups, age_group_data):
         copy=["collection_date"],
     )
 
-    # df = age_group_map.data_to_polars("supergroup")
+    df = age_group_map.data_to_polars("supergroup")
 
-    # assert_frame_equal(
-    #     age_group_data.drop(["to_exclude", "notes"]), df, check_row_order=False
-    # )
+    assert_frame_equal(
+        age_group_data.drop(["to_exclude", "notes"]), df, check_row_order=False
+    )
 
 
 def test_disagg_ragged_categorical(state_data):
@@ -246,7 +246,6 @@ def test_disagg_ragged_categorical(state_data):
 
 
 # def test_disagg_continuous_age(age_group_data, age_subgroups):
-
 #     disagg = disaggregate(
 #         supergroup_df=age_group_data,
 #         subgroup_df=age_subgroups,
