@@ -131,7 +131,7 @@ class Group:
         )
         filter_attributes = self.get_attributes(self.filter_on)
         this_grp = df.filter(
-            pl.col(attr.name) == attr.value  # pyright: ignore[reportArgumentType]
+            pl.col(attr.name) == attr.filter_value  # pyright: ignore[reportArgumentType]
             for attr in filter_attributes
         ).drop(self.filter_on)
         if assert_unique:
@@ -281,10 +281,11 @@ class GroupMap:
         self,
         group_type: GroupType,
         attribute_name: Hashable,
-        attribute_values: dict[Hashable, object],
+        attribute_values: dict[Hashable, Any],
         impute_action: ImputeAction,
         attribute_class: type[Attribute] | type[ImputableAttribute],
         measurement_type: MeasurementType | None = None,
+        attribute_filter_values: dict[Hashable, Any] | None = None,
     ):
         """
         Bulk addition of attributes to all sub or supergroups.
@@ -303,6 +304,10 @@ class GroupMap:
             The class of the attribute to be added.
         measurement_type : MeasurementType | None
             The measurement type of the attribute to be added, if it is an ImputableAttribute.
+        attribute_filter_values : dict[Hashable, object] | None
+            If the `attribute_values` are not something recorded directly in a dataframe,
+            this specifies how a polars filter will be constructed to match
+            instances of this attribute. None means to use the `attribute_values`.
         """
         if group_type == "supergroup":
             group_names = self.supergroup_names
@@ -313,14 +318,28 @@ class GroupMap:
         else:
             raise ValueError(f"Unknown group_type: {group_type}")
         assert set(group_names).issubset(attribute_values.keys()), (
-            f"Cannot add attribute {attribute_name} to groups {set(group_names).difference(attribute_values.keys())} which are not found in `attr_values`. "
+            f"Cannot add attribute {attribute_name} to groups {set(group_names).difference(attribute_values.keys())} which are not found in `attr_values`."
         )
+        if attribute_filter_values is not None:
+            assert set(attribute_filter_values.keys()).issubset(
+                attribute_values.keys()
+            ), (
+                "If providing distinct filtering values from values, must provide one per group in `attribute_values`."
+            )
         kwargs = {"name": attribute_name, "impute_action": impute_action}
         if attribute_class is ImputableAttribute:
             kwargs |= {"measurement_type": measurement_type}
         for group_name in group_names:
             attr = attribute_class(
-                **(kwargs | {"value": attribute_values[group_name]})
+                **(
+                    kwargs
+                    | {
+                        "value": attribute_values[group_name],
+                        "filter_value": None
+                        if attribute_filter_values is None
+                        else attribute_filter_values[group_name],
+                    }
+                )
             )  # pyright: ignore[reportCallIssue]
             self.groups[group_name] = self.groups[group_name].add_attribute(
                 attr

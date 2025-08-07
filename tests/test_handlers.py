@@ -77,7 +77,10 @@ class TestAgeGroups:
                 name="0 years",
                 attributes=[
                     Attribute(
-                        name="age", value=Range(0, 1), impute_action="ignore"
+                        name="age",
+                        value=Range(0, 1),
+                        impute_action="ignore",
+                        filter_value="0 years",
                     )
                 ],
             ),
@@ -85,7 +88,10 @@ class TestAgeGroups:
                 name="1-<2 years",
                 attributes=[
                     Attribute(
-                        name="age", value=Range(1, 2), impute_action="ignore"
+                        name="age",
+                        value=Range(1, 2),
+                        impute_action="ignore",
+                        filter_value="1-<2 years",
                     )
                 ],
             ),
@@ -96,6 +102,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(0, 6.0 / 12.0),
                         impute_action="ignore",
+                        filter_value="0-<6 months",
                     )
                 ],
             ),
@@ -106,6 +113,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(6.0 / 12.0, 1.0),
                         impute_action="ignore",
+                        filter_value="6 months-<1 year",
                     )
                 ],
             ),
@@ -113,7 +121,10 @@ class TestAgeGroups:
                 name="1 year",
                 attributes=[
                     Attribute(
-                        name="age", value=Range(1, 2), impute_action="ignore"
+                        name="age",
+                        value=Range(1, 2),
+                        impute_action="ignore",
+                        filter_value="1 year",
                     )
                 ],
             ),

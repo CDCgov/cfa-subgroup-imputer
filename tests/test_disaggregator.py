@@ -153,14 +153,11 @@ def test_disaggregator_age_continuous():
         measurement_type="count",
     )
 
-    # 4. Disaggregate using ProportionsFromContinuous
     disaggregator = Disaggregator(
         ProportionsFromContinuous(continuous_var_name="age")
     )
     result_map = disaggregator(group_map)
 
-    # 5. Verify the results
-    # Check that total size is conserved
     total_size_before = sum(supergroup_sizes.values())
     total_size_after = sum(
         result_map.group(sg_name).get_attribute("size").value

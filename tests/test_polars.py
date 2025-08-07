@@ -48,6 +48,35 @@ def state_data():
     )
 
 
+@pytest.fixture
+def age_group_data():
+    return pl.DataFrame(
+        {
+            "age_group": ["0-17 years", "18+ years"],
+            "size": [1800, 8200],
+            "cases": [180, 820],
+            "vaccination_rate": [0.4, 0.8],
+            "collection_date": ["2024-01-01", "2024-01-01"],
+            "notes": ["young", "adult"],
+            "to_exclude": ["skip1", "skip2"],
+        }
+    )
+
+
+@pytest.fixture
+def age_subgroups():
+    return pl.DataFrame(
+        {
+            "age_group": [
+                "0-4 years",
+                "5-17 years",
+                "18-64 years",
+                "65+ years",
+            ],
+        }
+    )
+
+
 def test_groups_from_df(three_counties):
     map_expected = {
         ("Sutter", "California"): "California",
@@ -127,7 +156,7 @@ def test_groups_from_df(three_counties):
     assert three_counties.sub_to_super == map_expected
 
 
-def test_data_io(three_counties, state_data):
+def test_data_io_categorical(three_counties, state_data):
     three_counties.data_from_polars(
         state_data,
         "supergroup",
@@ -144,7 +173,33 @@ def test_data_io(three_counties, state_data):
     )
 
 
-def test_disagg(state_data):
+def test_data_io_age_groups(age_subgroups, age_group_data):
+    age_group_map = create_group_map(
+        supergroup_df=age_group_data,
+        subgroup_df=age_subgroups,
+        subgroup_to_supergroup=None,
+        supergroups_from="age_group",
+        subgroups_from="age_group",
+        group_type="age",
+    )
+
+    age_group_map.data_from_polars(
+        age_group_data,
+        "supergroup",
+        exclude=["to_exclude", "notes"],
+        count=["cases", "size"],
+        rate=["vaccination_rate"],
+        copy=["collection_date"],
+    )
+
+    # df = age_group_map.data_to_polars("supergroup")
+
+    # assert_frame_equal(
+    #     age_group_data.drop(["to_exclude", "notes"]), df, check_row_order=False
+    # )
+
+
+def test_disagg_ragged_categorical(state_data):
     subgroup_df = pl.DataFrame(
         {
             "state": ["California", "California", "Washington", "Washington"],
@@ -188,3 +243,47 @@ def test_disagg(state_data):
         check_row_order=False,
         check_column_order=False,
     )
+
+
+# def test_disagg_continuous_age(age_group_data, age_subgroups):
+
+#     disagg = disaggregate(
+#         supergroup_df=age_group_data,
+#         subgroup_df=age_subgroups,
+#         subgroup_to_supergroup=None,
+#         supergroups_from="age_group",
+#         subgroups_from="age_group",
+#         group_type="age",
+#         loop_over=[],
+#         rate=["vaccination_rate"],
+#         count=["cases", "size"],
+#         copy=["collection_date"],
+#         exclude=["notes", "to_exclude"],
+#     )
+
+#     expected_disagg = pl.DataFrame(
+#         {
+#             "age_group": [
+#                 "0-4 years",
+#                 "5-17 years",
+#                 "18-64 years",
+#                 "65+ years",
+#             ],
+#             "size": [500.0, 1300.0, 4700.0, 3500.0],
+#             "cases": [50.0, 130.0, 470.0, 350.0],
+#             "vaccination_rate": [0.4, 0.4, 0.8, 0.8],
+#             "collection_date": [
+#                 "2024-01-01",
+#                 "2024-01-01",
+#                 "2024-01-01",
+#                 "2024-01-01",
+#             ],
+#         }
+#     )
+
+#     assert_frame_equal(
+#         disagg,
+#         expected_disagg,
+#         check_row_order=False,
+#         check_column_order=False,
+#     )

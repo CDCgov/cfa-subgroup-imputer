@@ -42,6 +42,7 @@ class Attribute:
         value: Any,
         name: Hashable,
         impute_action: ImputeAction,
+        filter_value: Any | None = None,
     ):
         """
         Attribute constructor.
@@ -55,8 +56,13 @@ class Attribute:
         impute_action: ImputeAction
             What should we do with this measurement when disaggregating?
             Note that just because we can impute it doesn't mean we will.
+        filter_value : Any
+            If the `value` is not something recorded directly in a dataframe,
+            this specifies how a polars filter will be constructed to match
+            instances of this attribute. None means to use the value.
         """
         self.value = value
+        self.filter_value = filter_value if filter_value is not None else value
         self.name: Hashable = name
         self.impute_action: ImputeAction = impute_action
         self._validate()
@@ -65,11 +71,12 @@ class Attribute:
         return (
             self.name == x.name
             and self.value == x.value
+            and self.filter_value == x.filter_value
             and self.impute_action == x.impute_action
         )
 
     def __repr__(self):
-        return f"Attribute(name={self.name}, impute_action={self.impute_action}, value={self.value})"
+        return f"Attribute(name={self.name}, impute_action={self.impute_action}, value={self.value}, filter_value={self.filter_value})"
 
     def _validate(self):
         assert isinstance(self.name, Hashable)
@@ -88,6 +95,7 @@ class ImputableAttribute(Attribute):
         name: Hashable,
         impute_action: ImputeAction,
         measurement_type: MeasurementType,
+        filter_value: Any | None = None,
     ):
         """
         ImputableAttribute constructor.
@@ -103,9 +111,18 @@ class ImputableAttribute(Attribute):
             Note that just because we can impute it doesn't mean we will.
         type: MeasurementType
             What kind of imputable attribute is this?
+        filter_value : Any
+            If the `value` is not something recorded directly in a dataframe,
+            this specifies how a polars filter will be constructed to match
+            instances of this attribute. None means to use the value.
         """
         assert value >= 0.0
-        super().__init__(value, name, impute_action)
+        super().__init__(
+            value=value,
+            name=name,
+            impute_action=impute_action,
+            filter_value=filter_value,
+        )
         self.measurement_type: MeasurementType = measurement_type
         assert self.measurement_type in get_args(MeasurementType)
 

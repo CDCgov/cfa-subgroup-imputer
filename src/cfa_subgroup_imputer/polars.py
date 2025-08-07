@@ -76,6 +76,7 @@ def create_group_map(
 
 def disaggregate(
     supergroup_df: pl.DataFrame,
+    # TODO: we should perhaps let this be just a list of values for splitting on age
     subgroup_df: pl.DataFrame,
     subgroup_to_supergroup: pl.DataFrame | None,
     supergroups_from: str,
@@ -137,7 +138,7 @@ def disaggregate(
             "df": subgroup_df,
             "groups_from": [subgroups_from] + [supergroups_from]
             if group_type == "categorical"
-            else [],
+            else [subgroups_from],
             "n_groups": len(group_map.subgroup_names()),
         },
     }.items():
