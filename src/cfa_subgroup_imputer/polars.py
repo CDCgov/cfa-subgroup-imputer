@@ -169,8 +169,10 @@ def disaggregate(
         .difference(rate)
         .difference(count)
         .difference(ignore)
+        # TODO: this is somewhat redundant with data_from_polars knowing not to copy group-defining variables
+        .difference([supergroups_from])
     )
-    disagg_comp = []
+    disagg_df_comp = []
     for supergroup_dfg, subgroup_dfg in zip(
         supergroup_df.group_by(safe_loop_over),
         subgroup_df.group_by(safe_loop_over),
@@ -194,6 +196,7 @@ def disaggregate(
             rate=rate,
         )
 
-        disagg_comp.append(disaggregator(grp_map).data_to_polars("subgroup"))
+        disagg_map = disaggregator(grp_map)
+        disagg_df_comp.append(disagg_map.data_to_polars("subgroup"))
 
-    return pl.concat(disagg_comp).drop("dummy")
+    return pl.concat(disagg_df_comp).drop("dummy")

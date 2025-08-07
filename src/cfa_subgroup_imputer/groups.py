@@ -397,6 +397,7 @@ class GroupMap:
             measurement_type = None
             attribute_class = Attribute
             if col in count or col in rate:
+                impute_action = "impute"
                 measurement_type = "count" if col in count else "rate"
                 attribute_class = ImputableAttribute
             self.add_attribute(

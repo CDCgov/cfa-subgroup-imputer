@@ -134,7 +134,6 @@ class TestGroup:
         child = parent.disaggregate_one_subgroup(
             subgroup=child_precursor, prop=0.42
         )
-        print(child)
 
         assert child == child_expected
 

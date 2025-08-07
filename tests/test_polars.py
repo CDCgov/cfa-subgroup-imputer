@@ -153,7 +153,7 @@ def test_disagg(state_data):
         }
     )
 
-    _ = disaggregate(
+    disagg = disaggregate(
         supergroup_df=state_data,
         subgroup_df=subgroup_df,
         subgroup_to_supergroup=None,
@@ -161,7 +161,30 @@ def test_disagg(state_data):
         subgroups_from="splitvar",
         group_type="categorical",
         loop_over=[],
-        rate=[],
-        count=[],
+        rate=["some_rate"],
+        count=["some_count"],
         exclude=["to_exclude", "to_ignore"],
+    )
+
+    expected_disagg = pl.DataFrame(
+        {
+            "state": ["California", "California", "Washington", "Washington"],
+            "splitvar": ["cat1", "cat2", "cat1", "cat2"],
+            "size": [20, 20, 2, 6],
+            "flower": [
+                "Eschscholzia californica",
+                "Eschscholzia californica",
+                "Rhododendron macrophyllum",
+                "Rhododendron macrophyllum",
+            ],
+            "some_rate": [1.2, 1.2, 1.3, 1.3],
+            "some_count": [5.0, 5.0, 5.0, 15.0],
+        }
+    )
+
+    assert_frame_equal(
+        disagg,
+        expected_disagg,
+        check_row_order=False,
+        check_column_order=False,
     )
