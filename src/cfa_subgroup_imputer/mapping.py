@@ -284,7 +284,7 @@ class AgeGroupHandler:
         subgroups: Iterable[str],
         **kwargs,
     ) -> GroupMap:
-        age_varname = kwargs.get("variable_name", "age")
+        age_varname = kwargs.get("continuous_var_name", "age")
         missing_option = kwargs.get("missing_option", "error")
 
         # Brute force attribution

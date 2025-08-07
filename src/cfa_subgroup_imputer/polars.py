@@ -53,13 +53,22 @@ def create_group_map(
         return OuterProductSubgroupHandler().construct_group_map(
             supergroup_categories=supergroup_cats,
             subgroup_categories=[subgroup_cats],
+            supergroup_variable_name=supergroups_from,
+            subgroup_variable_names=[subgroups_from],
             **kwargs,
         )
     elif group_type == "age":
+        # TODO: we could rename this ourselves, instead of erroring out
+        assert supergroups_from == subgroups_from, (
+            "Age groups must be named identically in super and subgroup dataframes"
+        )
         return AgeGroupHandler(
             age_max=kwargs.get("age_max", 100)
         ).construct_group_map(
-            supergroups=supergroup_cats, subgroups=subgroup_cats, **kwargs
+            supergroups=supergroup_cats,
+            subgroups=subgroup_cats,
+            continuous_var_name=subgroups_from,
+            **kwargs,
         )
     else:
         raise RuntimeError(f"Unknown grouping variable type {group_type}")
