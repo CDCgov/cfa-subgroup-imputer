@@ -1,7 +1,7 @@
 import pytest
 
-from cfa_subgroup_imputer.groups import Group
-from cfa_subgroup_imputer.variables import Attribute
+from cfa_subgroup_imputer.groups import Group, GroupMap
+from cfa_subgroup_imputer.variables import Attribute, ImputableAttribute
 
 
 class TestGroup:
@@ -68,3 +68,137 @@ class TestGroup:
                 ),
             ],
         )
+
+    def test_disagg_partial(self):
+        parent = Group(
+            name="parent",
+            attributes=[
+                Attribute(name="size", impute_action="ignore", value=100),
+                Attribute(
+                    name="foo",
+                    impute_action="ignore",
+                    value="this should not be copied",
+                ),
+                Attribute(name="bar", impute_action="copy", value=None),
+                ImputableAttribute(
+                    name="mcguffin",
+                    impute_action="impute",
+                    value=3.14159,
+                    measurement_type="count",
+                ),
+                ImputableAttribute(
+                    name="nee",
+                    impute_action="impute",
+                    value=2.718282,
+                    measurement_type="rate",
+                ),
+            ],
+        )
+        child_precursor = Group(
+            name="child",
+            attributes=[
+                Attribute(name="size", impute_action="ignore", value=42),
+                Attribute(
+                    name="spanish inquisition",
+                    impute_action="ignore",
+                    value="nobody expects",
+                ),
+            ],
+        )
+
+        child_expected = Group(
+            name="child",
+            attributes=[
+                Attribute(name="size", impute_action="ignore", value=42),
+                Attribute(name="bar", impute_action="copy", value=None),
+                ImputableAttribute(
+                    name="mcguffin",
+                    impute_action="impute",
+                    value=0.42 * 3.14159,
+                    measurement_type="count",
+                ),
+                ImputableAttribute(
+                    name="nee",
+                    impute_action="impute",
+                    value=2.718282,
+                    measurement_type="rate_from_count",
+                ),
+                Attribute(
+                    name="spanish inquisition",
+                    impute_action="ignore",
+                    value="nobody expects",
+                ),
+            ],
+        )
+
+        child = parent.disaggregate_one_subgroup(
+            subgroup=child_precursor, prop=0.42
+        )
+
+        assert child == child_expected
+
+
+class TestGroupMap:
+    def test_add_attribute(self):
+        group_map = GroupMap(
+            sub_to_super={
+                "subgroup1": "supergroup1",
+                "subgroup2": "supergroup1",
+            },
+            groups=[
+                Group(name="supergroup1", attributes=[]),
+                Group(name="subgroup1", attributes=[]),
+                Group(name="subgroup2", attributes=[]),
+            ],
+        )
+
+        group_map.add_attribute(
+            group_type="subgroup",
+            attribute_name="new_attribute",
+            attribute_values={"subgroup1": "value1", "subgroup2": "value2"},
+            impute_action="ignore",
+            attribute_class=Attribute,
+        )
+
+        group_map.add_attribute(
+            group_type="supergroup",
+            attribute_name="other_attribute",
+            attribute_values={"supergroup1": "value0"},
+            impute_action="ignore",
+            attribute_class=Attribute,
+        )
+
+        groups_expected = {
+            "supergroup1": Group(
+                name="supergroup1",
+                attributes=[
+                    Attribute(
+                        name="other_attribute",
+                        value="value0",
+                        impute_action="ignore",
+                    )
+                ],
+            ),
+            "subgroup1": Group(
+                name="subgroup1",
+                attributes=[
+                    Attribute(
+                        name="new_attribute",
+                        value="value1",
+                        impute_action="ignore",
+                    )
+                ],
+            ),
+            "subgroup2": Group(
+                name="subgroup2",
+                attributes=[
+                    Attribute(
+                        name="new_attribute",
+                        value="value2",
+                        impute_action="ignore",
+                    )
+                ],
+            ),
+        }
+
+        assert group_map.groups == groups_expected

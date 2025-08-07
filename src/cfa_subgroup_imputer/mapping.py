@@ -108,6 +108,9 @@ class RaggedOuterProductSubgroupHandler(ABC):
                 measurement_type=None,
             )
 
+        group_map.add_filters("supergroup", [variable_names[-1]])
+        group_map.add_filters("subgroup", variable_names)
+
         return group_map
 
 
@@ -281,7 +284,7 @@ class AgeGroupHandler:
         subgroups: Iterable[str],
         **kwargs,
     ) -> GroupMap:
-        age_varname = kwargs.get("variable_name", "age")
+        age_varname = kwargs.get("continuous_var_name", "age")
         missing_option = kwargs.get("missing_option", "error")
 
         # Brute force attribution
@@ -315,6 +318,7 @@ class AgeGroupHandler:
             attribute_values={
                 subgrp: self.age_range_from_str(subgrp) for subgrp in subgroups
             },
+            attribute_polars_values={subgrp: subgrp for subgrp in subgroups},
             impute_action="ignore",
             attribute_class=Attribute,
         )
@@ -325,6 +329,9 @@ class AgeGroupHandler:
                 supergrp: self.age_range_from_str(supergrp)
                 for supergrp in supergroups
             },
+            attribute_polars_values={
+                supergrp: supergrp for supergrp in supergroups
+            },
             impute_action="ignore",
             attribute_class=Attribute,
         )
@@ -334,6 +341,9 @@ class AgeGroupHandler:
             Range(sorted_super_ranges[0].lower, sorted_super_ranges[-1].upper),
             sorted_super_ranges,
         )
+
+        grp_map.add_filters("supergroup", [age_varname])
+        grp_map.add_filters("subgroup", [age_varname])
 
         return grp_map
 

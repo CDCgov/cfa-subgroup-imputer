@@ -3,17 +3,17 @@ Submodule for broad-sense handling of supergroups and subgroups.
 """
 
 from collections import Counter
-from collections.abc import Iterable, Mapping
-from typing import Hashable, Literal, Self, get_args
+from collections.abc import Container, Iterable, Mapping
+from typing import Any, Hashable, Literal, Self, get_args
 
 import polars as pl
 
 from cfa_subgroup_imputer.variables import (
     Attribute,
-    DensityMeasurementType,
     ImputableAttribute,
     ImputeAction,
     MeasurementType,
+    RateMeasurementType,
 )
 
 GroupType = Literal["supergroup", "subgroup"]
@@ -28,6 +28,7 @@ class Group:
         self,
         name: Hashable,
         attributes: Iterable[Attribute] = [],
+        filter_on: Iterable[str] | None = None,
     ):
         """
         Group constructor
@@ -49,6 +50,7 @@ class Group:
         """
         self.name = name
         self.attributes = tuple(attributes)
+        self.filter_on = filter_on
         self._validate()
 
     def __eq__(self, x: Self):
@@ -74,7 +76,7 @@ class Group:
         )
         measurement_names = [a.name for a in self.attributes]
         assert len(set(measurement_names)) == len(measurement_names), (
-            "Found multiple measurements for same attribute."
+            f"Found multiple measurements for same attribute when constructing group named {self.name}: {measurement_names}"
         )
         to_impute = set(
             a.name for a in self.attributes if a.impute_action == "impute"
@@ -99,51 +101,125 @@ class Group:
             name=self.name, attributes=self.attributes + (attribute,)
         )
 
+    def disaggregate_one_subgroup(
+        self,
+        subgroup: Self,
+        prop: float,
+        size_from: Hashable = "size",
+        subgroup_size_from: Hashable = "size",
+    ) -> Self:
+        assert 0.0 <= prop <= 1.0, (
+            f"Cannot disaggregate proportion {prop} of {self}."
+        )
+        disagg_attributes = list(subgroup.attributes)
+        for attr in self.rate_to_count(size_from).attributes:
+            if attr.impute_action == "copy":
+                disagg_attributes.append(attr)
+            elif attr.impute_action == "impute":
+                assert isinstance(attr, ImputableAttribute)
+                disagg_attributes.append(attr * prop)
+        return type(self)(subgroup.name, disagg_attributes).restore_rates(
+            subgroup_size_from
+        )
+
+    def filter(
+        self, df: pl.DataFrame, assert_unique: bool = True
+    ) -> pl.DataFrame:
+        assert self.filter_on is not None, f"{self} has nothing to filter on."
+        assert all(isinstance(fo, str) for fo in self.filter_on), (
+            f"{self} has non-str elements in `filter_on`."
+        )
+        filter_attributes = self.get_attributes(self.filter_on)
+        this_grp = df.filter(
+            pl.col(attr.name) == attr.polars_value  # pyright: ignore[reportArgumentType]
+            for attr in filter_attributes
+        ).drop(self.filter_on)
+        if assert_unique:
+            assert this_grp.shape[0] == 1, (
+                f"{df} contains multiple rows for {self}"
+            )
+
+        return this_grp
+
+    def _get_attribute(self, name: Hashable) -> Attribute | None:
+        """
+        Get stated attribute, if it exists.
+        """
+        name_matched = [a for a in self.attributes if a.name == name]
+        if len(name_matched) == 0:
+            return None
+        assert len(name_matched) == 1, (
+            f"Malformed group {self} has multiple attributes {name}"
+        )
+        return name_matched[0]
+
+    def get_attribute(self, name: Hashable) -> Attribute:
+        """
+        Retrieve stated attribute or die trying.
+        """
+        attr = self._get_attribute(name)
+        assert attr is not None, f"{self} has no attribute {name}"
+        return attr
+
+    def get_attributes(self, names: Iterable[Hashable]) -> Iterable[Attribute]:
+        """
+        Retrieve stated attribute or die trying.
+        """
+        return [self.get_attribute(name) for name in names]
+
     def rate_to_count(self, size_from: Hashable = "size") -> Self:
         """
         Make all measurements masses.
         """
 
         size = self.get_attribute(size_from).value
-        assert isinstance(size, float)
         assert size > 0
         attributes = [
             a.to_count(size)
             if a.impute_action == "impute"
             and isinstance(a, ImputableAttribute)
-            and a.measurement_type in get_args(DensityMeasurementType)
+            and a.measurement_type in get_args(RateMeasurementType)
             else a
             for a in self.attributes
         ]
         return type(self)(name=self.name, attributes=attributes)
-
-    def get_attribute(self, name: Hashable) -> Attribute:
-        """
-        Retrieve stated measurement.
-        """
-        name_matched = [a for a in self.attributes if a.name == name]
-        assert len(name_matched) > 0, f"{self} has no attribute {name}"
-        assert len(name_matched) == 1, (
-            f"Malformed group {self} has multiple attributes {name}"
-        )
-        return name_matched[0]
 
     def restore_rates(self, size_from: Hashable = "size") -> Self:
         """
         Undo density_to_mass().
         """
         size = self.get_attribute(size_from).value
-        assert isinstance(size, float)
         assert size > 0
         attributes = [
             a.to_rate(size)
             if a.impute_action == "impute"
             and isinstance(a, ImputableAttribute)
-            and a.measurement_type == "mass_from_density"
+            and a.measurement_type == "count_from_rate"
             else a
             for a in self.attributes
         ]
         return type(self)(name=self.name, attributes=attributes)
+
+    def to_dict(self, use_polars_values=False) -> dict[Hashable, Any]:
+        assert self.attributes, (
+            f"Cannot call to_dict() on {self} which has no attributes."
+        )
+        if use_polars_values:
+            return {attr.name: attr.polars_value for attr in self.attributes}
+        else:
+            return {attr.name: attr.value for attr in self.attributes}
+
+    def to_polars_dict(self) -> dict[str, Any]:
+        as_dict = self.to_dict(use_polars_values=True)
+        assert (
+            nonstr := set(
+                nm for nm in as_dict.keys() if not isinstance(nm, str)
+            )
+        ) == set(), (
+            f"Cannot convert {self} to polars dict, some attribute names are not strings: {nonstr}"
+        )
+
+        return as_dict  # pyright: ignore[reportReturnType]
 
 
 class GroupMap:
@@ -182,44 +258,37 @@ class GroupMap:
         sub_to_super = GroupMap.make_many_to_one(super_to_sub)
         return cls(sub_to_super, groups)
 
-    def _assert_names_unique(self) -> None:
-        """
-        Ensure that super and subgroup names are all unique.
-        """
-        group_names = [group.name for group in self.groups.values()]
-        repeats = [
-            name for name, count in Counter(group_names).items() if count > 1
-        ]
-        assert len(repeats) == 0, (
-            f"The following group names are not unique: {repeats}"
-        )
-
-    def _assert_no_missing_data(self) -> None:
-        """
-        Ensure that each supergroup's size is the sum of constituent subgroup sizes.
-        """
-        raise NotImplementedError()
-
-    def _assert_no_missing_population(self, size_from: Hashable) -> None:
-        """
-        Ensure that each supergroup's size is the sum of constituent subgroup sizes.
-        """
-        raise NotImplementedError()
-
     def _validate(self):
-        self._assert_names_unique()
-        # @TODO: Should these be done at (dis)aggregation time outside this class?
-        # self._assert_no_missing_population()
-        # self._assert_no_missing_data()
+        # Groups in mapping are in self.groups
+        for group in self.sub_to_super.keys():
+            assert group in self.groups, (
+                f"Subgroup {group} is present in self.sub_to_super but not in self.groups"
+            )
+        for group in set(self.sub_to_super.values()):
+            assert group in self.groups, (
+                f"Supergroup {group} is present in self.sub_to_super but not in self.groups"
+            )
+        # Groups in self.groups are in mapping
+        for group in self.groups.keys():
+            in_sub = group in self.sub_to_super.keys()
+            in_super = group in self.sub_to_super.values()
+            assert in_sub or in_super, (
+                f"Group {group} is present in self.groups but not in self.sub_to_super"
+            )
+            if in_sub and in_super:
+                assert Counter(self.sub_to_super.items())[group] == 1, (
+                    "Group is both a supergroup and a subgroup but is not 1:1."
+                )
 
     def add_attribute(
         self,
         group_type: GroupType,
         attribute_name: Hashable,
-        attribute_values: dict[Hashable, object],
+        attribute_values: dict[Hashable, Any],
         impute_action: ImputeAction,
         attribute_class: type[Attribute] | type[ImputableAttribute],
         measurement_type: MeasurementType | None = None,
+        attribute_polars_values: dict[Hashable, Any] | None = None,
     ):
         """
         Bulk addition of attributes to all sub or supergroups.
@@ -238,6 +307,10 @@ class GroupMap:
             The class of the attribute to be added.
         measurement_type : MeasurementType | None
             The measurement type of the attribute to be added, if it is an ImputableAttribute.
+        attribute_polars_values : dict[Hashable, object] | None
+            If the `attribute_values` are not something recorded directly in a dataframe,
+            this specifies how the values will be compared against polars dataframe
+            values and how they will be exported to polars. None means to use the `attribute_values`.
         """
         if group_type == "supergroup":
             group_names = self.supergroup_names
@@ -248,65 +321,137 @@ class GroupMap:
         else:
             raise ValueError(f"Unknown group_type: {group_type}")
         assert set(group_names).issubset(attribute_values.keys()), (
-            f"Cannot add attribute {attribute_name} to groups {set(group_names).difference(attribute_values.keys())} which are not found in `attr_values`. "
+            f"Cannot add attribute {attribute_name} to groups {set(group_names).difference(attribute_values.keys())} which are not found in `attr_values`."
         )
+        if attribute_polars_values is not None:
+            assert set(attribute_polars_values.keys()).issubset(
+                attribute_values.keys()
+            ), (
+                "If providing distinct filtering values from values, must provide one per group in `attribute_values`."
+            )
         kwargs = {"name": attribute_name, "impute_action": impute_action}
         if attribute_class is ImputableAttribute:
             kwargs |= {"measurement_type": measurement_type}
         for group_name in group_names:
             attr = attribute_class(
-                **(kwargs | {"value": attribute_values[group_name]})
+                **(
+                    kwargs
+                    | {
+                        "value": attribute_values[group_name],
+                        "polars_value": None
+                        if attribute_polars_values is None
+                        else attribute_polars_values[group_name],
+                    }
+                )
             )  # pyright: ignore[reportCallIssue]
             self.groups[group_name] = self.groups[group_name].add_attribute(
                 attr
             )
 
-    def add_data_from_polars(self, df: pl.DataFrame) -> Self:
-        """
-        Add the data found in this dataframe to the relevant groups.
-        """
-        raise NotImplementedError()
-
-    @property
-    def aggregatable(self) -> bool:
-        """
-        We can aggregate the subgroups if we have data for all measurements in all subgroups.
-        """
-        raise NotImplementedError()
-
-    def density_to_mass(self, sub_or_super: GroupType) -> Self:
-        """
-        Put all density measurements in super or subgroups on mass scale for ease of downstream manipulation.
-        """
-        raise NotImplementedError()
+    def add_filters(self, group_type: GroupType, filters: Iterable[str]):
+        if group_type == "subgroup":
+            group_names = self.subgroup_names()
+        elif group_type == "supergroup":
+            group_names = self.supergroup_names
+        else:
+            raise RuntimeError(f"Unknown group type {group_type}")
+        for grp_name in group_names:
+            self.group(grp_name).filter_on = filters
 
     def group(self, name: Hashable) -> Group:
         return self.groups[name]
 
-    def restore_densities(self, sub_or_super: GroupType) -> Self:
-        """
-        Undo density_to_mass for selected measurements.
-        """
-        raise NotImplementedError()
-
-    def data_to_polars(self, sub_or_super: GroupType) -> pl.DataFrame:
+    def data_to_polars(self, group_type: GroupType) -> pl.DataFrame:
         """
         Creates a polars dataframe of the measurements in either the supergroups or subgroups.
         """
-        raise NotImplementedError()
+        if group_type == "subgroup":
+            group_names = self.subgroup_names()
+        elif group_type == "supergroup":
+            group_names = self.supergroup_names
+        else:
+            raise RuntimeError(f"Unknown group type {group_type}")
 
-    def data_from_polars(self, df: pl.DataFrame):
+        return pl.from_dicts(
+            [self.group(grp_name).to_polars_dict() for grp_name in group_names]
+        )
+
+    def data_from_polars(
+        self,
+        df: pl.DataFrame,
+        group_type: GroupType,
+        exclude: Container[str],
+        count: Container[str],
+        copy: Container[str],
+        rate: Container[str],
+    ):
         """
         Populates measurements and attributes for groups found in the dataframe.
         """
-        raise NotImplementedError()
+        if group_type == "subgroup":
+            group_names = self.subgroup_names()
+        elif group_type == "supergroup":
+            group_names = self.supergroup_names
+        else:
+            raise RuntimeError(f"Unknown group type {group_type}")
 
-    @property
-    def disaggregatable(self) -> bool:
-        """
-        We can disaggregate the supergroups if we have data for all measurements in all supergroups.
-        """
-        raise NotImplementedError()
+        filters = self.get_filters(group_type)
+        assert filters is not None
+        cols = [
+            col
+            for col in df.columns
+            if ((col not in exclude) and (col not in filters))
+        ]
+
+        all_grps_all_vals: dict[Hashable, dict[str, Any]] = {
+            grp_name: self.group(grp_name)
+            .filter(df, assert_unique=True)
+            .to_dicts()[0]
+            for grp_name in group_names
+        }
+
+        for col in cols:
+            vals = {
+                grp_name: all_grps_all_vals[grp_name][col]
+                for grp_name in group_names
+            }
+            impute_action = "copy" if col in copy else "ignore"
+            measurement_type = None
+            attribute_class = Attribute
+            if col in count or col in rate:
+                impute_action = "impute"
+                measurement_type = "count" if col in count else "rate"
+                attribute_class = ImputableAttribute
+            self.add_attribute(
+                group_type=group_type,
+                attribute_name=col,
+                attribute_values=vals,
+                impute_action=impute_action,
+                attribute_class=attribute_class,
+                measurement_type=measurement_type,
+            )
+
+    def get_filters(self, group_type: GroupType) -> Iterable[str]:
+        if group_type == "subgroup":
+            group_names = self.subgroup_names()
+        elif group_type == "supergroup":
+            group_names = self.supergroup_names
+        else:
+            raise RuntimeError(f"Unknown group type {group_type}")
+
+        all_filters = []
+        for grp_name in group_names:
+            grp_filters = self.group(grp_name).filter_on
+            assert grp_filters is not None, (
+                f"Group named {grp_name} has no filter"
+            )
+            all_filters.append(tuple(grp_filters))
+
+        assert len(set(all_filters)) == 1, (
+            f"Not all {group_type}s have same filters."
+        )
+
+        return all_filters.pop()
 
     @staticmethod
     def make_many_to_one(
@@ -332,10 +477,17 @@ class GroupMap:
                 super_to_sub[v] = [k]
         return super_to_sub
 
-    def subgroup_names(self, name: Hashable) -> list[Hashable]:
+    def subgroup_names(self, name: Hashable | None = None) -> list[Hashable]:
         """
         Get names of subgroups this supergroup contains
         """
+        if name is None:
+            group_names = []
+            for supergrp in self.supergroup_names:
+                group_names = group_names + self.subgroup_names(supergrp)
+
+            return group_names
+
         assert name in self.super_to_sub.keys()
         return self.super_to_sub[name]
 
