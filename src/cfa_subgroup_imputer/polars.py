@@ -157,13 +157,18 @@ def disaggregate(
             f"Dataframe has multiple entries for at least one combination of group-defining variables ({grp_info['groups_from']}) and variables to loop over ({loop_over}).\n{grp_info['df']}"
         )
 
-    # If we're not told what to do with the column, copy it
+    # If we're not told what to do with the column, and it's not being used to compute proportions, copy it
+    if subgroup_to_supergroup is not None or group_type == "categorical":
+        ignore = [kwargs.get("size_from", "size")]
+    elif group_type == "age":
+        ignore = [kwargs.get("continuous_var_name", "age")]
     copy = (
         set(supergroup_df.columns)
         .difference(safe_loop_over)
         .difference(exclude)
         .difference(rate)
         .difference(count)
+        .difference(ignore)
     )
     disagg_comp = []
     for supergroup_dfg, subgroup_dfg in zip(

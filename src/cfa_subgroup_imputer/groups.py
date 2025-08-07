@@ -76,7 +76,7 @@ class Group:
         )
         measurement_names = [a.name for a in self.attributes]
         assert len(set(measurement_names)) == len(measurement_names), (
-            "Found multiple measurements for same attribute."
+            f"Found multiple measurements for same attribute when constructing group named {self.name}: {measurement_names}"
         )
         to_impute = set(
             a.name for a in self.attributes if a.impute_action == "impute"
