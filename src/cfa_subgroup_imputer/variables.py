@@ -11,10 +11,10 @@ from typing import (
     get_args,
 )
 
-MassMeasurementType = Literal["mass", "mass_from_density"]
-DensityMeasurementType = Literal["density", "density_from_mass"]
+CountMeasurementType = Literal["count", "count_from_rate"]
+RateMeasurementType = Literal["rate", "rate_from_count"]
 MeasurementType = Literal[
-    "mass", "density", "mass_from_density", "density_from_mass"
+    "count", "rate", "count_from_rate", "rate_from_count"
 ]
 """
 How a measurement behaves for disaggregation.
@@ -42,6 +42,7 @@ class Attribute:
         value: Any,
         name: Hashable,
         impute_action: ImputeAction,
+        polars_value: Any | None = None,
     ):
         """
         Attribute constructor.
@@ -55,8 +56,13 @@ class Attribute:
         impute_action: ImputeAction
             What should we do with this measurement when disaggregating?
             Note that just because we can impute it doesn't mean we will.
+        polars_value : Any
+            If the `value` is not something recorded directly in a dataframe,
+            this specifies how to compare to values in polars dataframes and
+            how to output this value to a dataframe.  None means to use the value.
         """
         self.value = value
+        self.polars_value = polars_value if polars_value is not None else value
         self.name: Hashable = name
         self.impute_action: ImputeAction = impute_action
         self._validate()
@@ -65,11 +71,12 @@ class Attribute:
         return (
             self.name == x.name
             and self.value == x.value
+            and self.polars_value == x.polars_value
             and self.impute_action == x.impute_action
         )
 
     def __repr__(self):
-        return f"Attribute(name={self.name}, impute_action={self.impute_action}, value={self.value})"
+        return f"Attribute(name={self.name}, impute_action={self.impute_action}, value={self.value}, polars_value={self.polars_value})"
 
     def _validate(self):
         assert isinstance(self.name, Hashable)
@@ -88,13 +95,14 @@ class ImputableAttribute(Attribute):
         name: Hashable,
         impute_action: ImputeAction,
         measurement_type: MeasurementType,
+        polars_value: Any | None = None,
     ):
         """
         ImputableAttribute constructor.
 
         Parameters
         ----------
-        value : float
+        value : float | int
             The value, e.g. a number of cases.
         name : Hashable
             What is this variable? E.g., "size" or "vaccination rate"
@@ -103,9 +111,18 @@ class ImputableAttribute(Attribute):
             Note that just because we can impute it doesn't mean we will.
         type: MeasurementType
             What kind of imputable attribute is this?
+        polars_value : Any
+            If the `value` is not something recorded directly in a dataframe,
+            this specifies how to compare to values in polars dataframes and
+            how to output this value to a dataframe.  None means to use the value.
         """
         assert value >= 0.0
-        super().__init__(value, name, impute_action)
+        super().__init__(
+            value=value,
+            name=name,
+            impute_action=impute_action,
+            polars_value=polars_value,
+        )
         self.measurement_type: MeasurementType = measurement_type
         assert self.measurement_type in get_args(MeasurementType)
 
@@ -113,7 +130,10 @@ class ImputableAttribute(Attribute):
         assert self.impute_action in get_args(ImputeAction)
 
     def __eq__(self, x):
-        return super().__eq__() and self.measurement_type == x.measurement_type
+        # @TODO: should we check strict equality? allow RateType == RateType? make a toggle? add .equivalent()?
+        return (
+            super().__eq__(x) and self.measurement_type == x.measurement_type
+        )
 
     def __mul__(self, k: float) -> Self:
         return type(self)(
@@ -128,7 +148,7 @@ class ImputableAttribute(Attribute):
             value=self.value * size,
             name=self.name,
             impute_action=self.impute_action,
-            measurement_type="mass_from_density",
+            measurement_type="count_from_rate",
         )
 
     def to_rate(self, volume: float) -> Self:
@@ -136,7 +156,7 @@ class ImputableAttribute(Attribute):
             value=self.value / volume,
             name=self.name,
             impute_action=self.impute_action,
-            measurement_type="density_from_mass",
+            measurement_type="rate_from_count",
         )
 
 
@@ -186,6 +206,9 @@ class Range:
 
     def __repr__(self):
         return f"Range({self.lower},{self.upper})"
+
+    def duration(self) -> float:
+        return self.upper - self.lower
 
     @classmethod
     def from_tuple(cls, low_high: tuple[float, float]):

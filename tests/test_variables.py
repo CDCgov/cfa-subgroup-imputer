@@ -2,6 +2,7 @@ import pytest
 
 from cfa_subgroup_imputer.variables import (
     Attribute,
+    ImputableAttribute,
     Range,
     assert_range_spanned_exactly,
 )
@@ -26,6 +27,41 @@ class TestAttribute:
         ) == Attribute(
             name="Outis", value=[dict(), tuple(), ""], impute_action="copy"
         )
+        assert ImputableAttribute(
+            name="attribute",
+            value=42,
+            impute_action="impute",
+            measurement_type="rate",
+        ) == ImputableAttribute(
+            name="attribute",
+            value=42,
+            impute_action="impute",
+            measurement_type="rate",
+        )
+        with pytest.raises(Exception):
+            assert Attribute(
+                name="Ourobouros",
+                value=[dict(), tuple(), ""],
+                impute_action="copy",
+            ) == Attribute(
+                name="Outis", value=[dict(), tuple(), ""], impute_action="copy"
+            )
+        with pytest.raises(Exception):
+            assert Attribute(
+                name="Outis",
+                value=[dict(), tuple()],
+                impute_action="copy",
+            ) == Attribute(
+                name="Outis", value=[dict(), tuple(), ""], impute_action="copy"
+            )
+        with pytest.raises(Exception):
+            assert Attribute(
+                name="Outis",
+                value=[dict(), tuple(), ""],
+                impute_action="ignore",
+            ) == Attribute(
+                name="Outis", value=[dict(), tuple(), ""], impute_action="copy"
+            )
 
 
 def test_range():
