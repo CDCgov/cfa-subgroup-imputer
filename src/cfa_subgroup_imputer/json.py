@@ -48,10 +48,12 @@ def create_group_map(
         "If not supplying `subgroup_to_supergroup`, must supply `subgroup_data`."
     )
 
-    supergroup_cats = list(
-        set(row[supergroups_from] for row in supergroup_data)
+    supergroup_cats = sorted(
+        list(set(row[supergroups_from] for row in supergroup_data))
     )
-    subgroup_cats = list(set(row[subgroups_from] for row in subgroup_data))
+    subgroup_cats = sorted(
+        list(set(row[subgroups_from] for row in subgroup_data))
+    )
     if group_type == "categorical":
         return OuterProductSubgroupHandler().construct_group_map(
             supergroup_categories=supergroup_cats,
@@ -157,7 +159,7 @@ def disaggregate(
         .difference(ignore)
         .difference([supergroups_from])
     )
-    disagg_df_comp = []
+    disagg_comp = []
 
     super_grouper = groupby(supergroup_data, key=itemgetter(*safe_loop_over))
     sub_grouper = groupby(subgroup_data, key=itemgetter(*safe_loop_over))
@@ -170,11 +172,8 @@ def disaggregate(
         )
         grp_map = deepcopy(group_map)
 
-        super_grp_list = list(super_grp)
-        sub_grp_list = list(sub_grp)
-
         grp_map.data_from_dicts(
-            super_grp_list,
+            list(super_grp),
             "supergroup",
             copy=copy,
             exclude=exclude,
@@ -182,7 +181,7 @@ def disaggregate(
             rate=rate,
         )
         grp_map.data_from_dicts(
-            sub_grp_list,
+            list(sub_grp),
             "subgroup",
             copy=copy,
             exclude=exclude,
@@ -191,11 +190,11 @@ def disaggregate(
         )
 
         disagg_map = disaggregator(grp_map)
-        disagg_df_comp.extend(disagg_map.to_dicts("subgroup"))
+        disagg_comp.extend(disagg_map.to_dicts("subgroup"))
 
     # Remove dummy variable if it was added
     if not loop_over:
-        for row in disagg_df_comp:
+        for row in disagg_comp:
             del row["dummy"]
 
-    return disagg_df_comp
+    return disagg_comp

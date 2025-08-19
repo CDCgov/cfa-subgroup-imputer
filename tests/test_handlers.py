@@ -159,6 +159,12 @@ class TestAgeGroups:
                 subgroups=["0 years", "2 years"],
             )
 
+        # Order
+        subgroups_expected = subgroups
+        supergroups_expected = supergroups
+        assert group_map.supergroup_names == supergroups_expected
+        assert group_map.subgroup_names() == subgroups_expected
+
 
 class TestCategoroical:
     def test_constructor(self):
@@ -276,3 +282,9 @@ class TestCategoroical:
 
         assert group_map.groups == groups_expected
         assert group_map.sub_to_super == map_expected
+
+        # Order
+        subgroups_expected = [k for k in map_expected.keys()]
+        supergroups_expected = supergroup_cats
+        assert group_map.supergroup_names == supergroups_expected
+        assert group_map.subgroup_names() == subgroups_expected

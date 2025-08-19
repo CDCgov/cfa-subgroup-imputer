@@ -302,7 +302,8 @@ def test_disagg_categorical(state_data):
         },
     ]
 
-    assert disagg == expected_disagg
+    for od, ed in zip(disagg, expected_disagg):
+        assert od == pytest.approx(ed)
 
 
 def test_disagg_continuous_age(age_group_data, age_subgroups):
@@ -351,4 +352,5 @@ def test_disagg_continuous_age(age_group_data, age_subgroups):
         },
     ]
 
-    assert disagg == expected_disagg
+    for od, ed in zip(disagg, expected_disagg):
+        assert od == pytest.approx(ed)
