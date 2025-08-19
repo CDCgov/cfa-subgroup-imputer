@@ -6,8 +6,6 @@ from collections import Counter
 from collections.abc import Container, Iterable, Mapping
 from typing import Any, Hashable, Literal, Self, get_args
 
-import polars as pl
-
 from cfa_subgroup_imputer.variables import (
     Attribute,
     ImputableAttribute,
@@ -123,23 +121,29 @@ class Group:
         )
 
     def filter(
-        self, df: pl.DataFrame, assert_unique: bool = True
-    ) -> pl.DataFrame:
+        self, data: Iterable[dict[str, Any]], assert_unique: bool = True
+    ) -> list[dict]:
         assert self.filter_on is not None, f"{self} has nothing to filter on."
         assert all(isinstance(fo, str) for fo in self.filter_on), (
             f"{self} has non-str elements in `filter_on`."
         )
-        filter_attributes = self.get_attributes(self.filter_on)
-        this_grp = df.filter(
-            pl.col(attr.name) == attr.polars_value  # pyright: ignore[reportArgumentType]
-            for attr in filter_attributes
-        ).drop(self.filter_on)
+
+        filtered_data = list(
+            filter(
+                lambda row: all(
+                    row[_filter] == self.get_attribute(_filter).json_value
+                    for _filter in self.filter_on  # pyright: ignore[reportOptionalIterable]
+                ),
+                data,
+            )
+        )
+
         if assert_unique:
-            assert this_grp.shape[0] == 1, (
-                f"{df} contains multiple rows for {self}"
+            assert len(filtered_data) == 1, (
+                f"{data} contains multiple rows for {self}"
             )
 
-        return this_grp
+        return filtered_data
 
     def _get_attribute(self, name: Hashable) -> Attribute | None:
         """
@@ -200,24 +204,20 @@ class Group:
         ]
         return type(self)(name=self.name, attributes=attributes)
 
-    def to_dict(self, use_polars_values=False) -> dict[Hashable, Any]:
+    def to_dict(self, use_json_values=False) -> dict[Hashable, Any]:
         assert self.attributes, (
             f"Cannot call to_dict() on {self} which has no attributes."
         )
-        if use_polars_values:
-            return {attr.name: attr.polars_value for attr in self.attributes}
+        if use_json_values:
+            return {attr.name: attr.json_value for attr in self.attributes}
         else:
             return {attr.name: attr.value for attr in self.attributes}
 
-    def to_polars_dict(self) -> dict[str, Any]:
-        as_dict = self.to_dict(use_polars_values=True)
-        assert (
-            nonstr := set(
-                nm for nm in as_dict.keys() if not isinstance(nm, str)
-            )
-        ) == set(), (
-            f"Cannot convert {self} to polars dict, some attribute names are not strings: {nonstr}"
-        )
+    def to_json_dict(self) -> dict[str, Any]:
+        for attr in self.attributes:
+            attr._assert_jsonable()
+
+        as_dict = self.to_dict(use_json_values=True)
 
         return as_dict  # pyright: ignore[reportReturnType]
 
@@ -288,7 +288,7 @@ class GroupMap:
         impute_action: ImputeAction,
         attribute_class: type[Attribute] | type[ImputableAttribute],
         measurement_type: MeasurementType | None = None,
-        attribute_polars_values: dict[Hashable, Any] | None = None,
+        attribute_json_values: dict[Hashable, Any] | None = None,
     ):
         """
         Bulk addition of attributes to all sub or supergroups.
@@ -307,10 +307,10 @@ class GroupMap:
             The class of the attribute to be added.
         measurement_type : MeasurementType | None
             The measurement type of the attribute to be added, if it is an ImputableAttribute.
-        attribute_polars_values : dict[Hashable, object] | None
-            If the `attribute_values` are not something recorded directly in a dataframe,
-            this specifies how the values will be compared against polars dataframe
-            values and how they will be exported to polars. None means to use the `attribute_values`.
+        attribute_json_values : dict[Hashable, object] | None
+            If the `attribute_values` are not something recorded directly in the json,
+            this specifies how the values will be compared against json
+            values and how they will be exported to json. None means to use the `attribute_values`.
         """
         if group_type == "supergroup":
             group_names = self.supergroup_names
@@ -323,8 +323,8 @@ class GroupMap:
         assert set(group_names).issubset(attribute_values.keys()), (
             f"Cannot add attribute {attribute_name} to groups {set(group_names).difference(attribute_values.keys())} which are not found in `attr_values`."
         )
-        if attribute_polars_values is not None:
-            assert set(attribute_polars_values.keys()).issubset(
+        if attribute_json_values is not None:
+            assert set(attribute_json_values.keys()).issubset(
                 attribute_values.keys()
             ), (
                 "If providing distinct filtering values from values, must provide one per group in `attribute_values`."
@@ -338,9 +338,9 @@ class GroupMap:
                     kwargs
                     | {
                         "value": attribute_values[group_name],
-                        "polars_value": None
-                        if attribute_polars_values is None
-                        else attribute_polars_values[group_name],
+                        "json_value": None
+                        if attribute_json_values is None
+                        else attribute_json_values[group_name],
                     }
                 )
             )  # pyright: ignore[reportCallIssue]
@@ -361,9 +361,9 @@ class GroupMap:
     def group(self, name: Hashable) -> Group:
         return self.groups[name]
 
-    def data_to_polars(self, group_type: GroupType) -> pl.DataFrame:
+    def to_dicts(self, group_type: GroupType) -> list[dict]:
         """
-        Creates a polars dataframe of the measurements in either the supergroups or subgroups.
+        Creates a list of dicts of the measurements in either the supergroups or subgroups.
         """
         if group_type == "subgroup":
             group_names = self.subgroup_names()
@@ -372,13 +372,13 @@ class GroupMap:
         else:
             raise RuntimeError(f"Unknown group type {group_type}")
 
-        return pl.from_dicts(
-            [self.group(grp_name).to_polars_dict() for grp_name in group_names]
-        )
+        return [
+            self.group(grp_name).to_json_dict() for grp_name in group_names
+        ]
 
-    def data_from_polars(
+    def data_from_dicts(
         self,
-        df: pl.DataFrame,
+        data: Iterable[dict],
         group_type: GroupType,
         exclude: Container[str],
         count: Container[str],
@@ -386,7 +386,7 @@ class GroupMap:
         rate: Container[str],
     ):
         """
-        Populates measurements and attributes for groups found in the dataframe.
+        Populates measurements and attributes for groups found in the data.
         """
         if group_type == "subgroup":
             group_names = self.subgroup_names()
@@ -397,34 +397,43 @@ class GroupMap:
 
         filters = self.get_filters(group_type)
         assert filters is not None
-        cols = [
-            col
-            for col in df.columns
-            if ((col not in exclude) and (col not in filters))
+
+        data_list = list(data)
+
+        all_keys = set(data_list[0].keys())
+        assert all(set(datum.keys()) == all_keys for datum in data), (
+            "Provided data do not all have same keys."
+        )
+
+        keys = [
+            key
+            for key in all_keys
+            if ((key not in exclude) and (key not in filters))
         ]
 
+        # We can do better than O(n^2)
         all_grps_all_vals: dict[Hashable, dict[str, Any]] = {
-            grp_name: self.group(grp_name)
-            .filter(df, assert_unique=True)
-            .to_dicts()[0]
+            grp_name: self.group(grp_name).filter(
+                data_list, assert_unique=True
+            )[0]
             for grp_name in group_names
         }
 
-        for col in cols:
+        for key in keys:
             vals = {
-                grp_name: all_grps_all_vals[grp_name][col]
+                grp_name: all_grps_all_vals[grp_name][key]
                 for grp_name in group_names
             }
-            impute_action = "copy" if col in copy else "ignore"
+            impute_action = "copy" if key in copy else "ignore"
             measurement_type = None
             attribute_class = Attribute
-            if col in count or col in rate:
+            if key in count or key in rate:
                 impute_action = "impute"
-                measurement_type = "count" if col in count else "rate"
+                measurement_type = "count" if key in count else "rate"
                 attribute_class = ImputableAttribute
             self.add_attribute(
                 group_type=group_type,
-                attribute_name=col,
+                attribute_name=key,
                 attribute_values=vals,
                 impute_action=impute_action,
                 attribute_class=attribute_class,

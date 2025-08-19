@@ -2,6 +2,7 @@
 Submodule for handling variables, whether measurements or quantities used to define subgroups.
 """
 
+import json
 from collections.abc import Iterable
 from typing import (
     Any,
@@ -42,7 +43,7 @@ class Attribute:
         value: Any,
         name: Hashable,
         impute_action: ImputeAction,
-        polars_value: Any | None = None,
+        json_value: Any | None = None,
     ):
         """
         Attribute constructor.
@@ -56,13 +57,13 @@ class Attribute:
         impute_action: ImputeAction
             What should we do with this measurement when disaggregating?
             Note that just because we can impute it doesn't mean we will.
-        polars_value : Any
+        json_value : Any
             If the `value` is not something recorded directly in a dataframe,
-            this specifies how to compare to values in polars dataframes and
-            how to output this value to a dataframe.  None means to use the value.
+            this specifies how to compare to values in json and
+            how to output this value to a json.  None means to use the value.
         """
         self.value = value
-        self.polars_value = polars_value if polars_value is not None else value
+        self.json_value = json_value if json_value is not None else value
         self.name: Hashable = name
         self.impute_action: ImputeAction = impute_action
         self._validate()
@@ -71,12 +72,22 @@ class Attribute:
         return (
             self.name == x.name
             and self.value == x.value
-            and self.polars_value == x.polars_value
+            and self.json_value == x.json_value
             and self.impute_action == x.impute_action
         )
 
     def __repr__(self):
-        return f"Attribute(name={self.name}, impute_action={self.impute_action}, value={self.value}, polars_value={self.polars_value})"
+        return f"Attribute(name={self.name}, impute_action={self.impute_action}, value={self.value}, json_value={self.json_value})"
+
+    def _assert_jsonable(self) -> None:
+        assert isinstance(self.name, str), f"{self} has non-str name."
+
+        try:
+            json.dumps(self.json_value)
+        except (TypeError, OverflowError) as e:
+            raise TypeError(
+                f"{self} has non-JSON serializable value {self.json_value}"
+            ) from e
 
     def _validate(self):
         assert isinstance(self.name, Hashable)
@@ -95,7 +106,7 @@ class ImputableAttribute(Attribute):
         name: Hashable,
         impute_action: ImputeAction,
         measurement_type: MeasurementType,
-        polars_value: Any | None = None,
+        json_value: Any | None = None,
     ):
         """
         ImputableAttribute constructor.
@@ -111,17 +122,17 @@ class ImputableAttribute(Attribute):
             Note that just because we can impute it doesn't mean we will.
         type: MeasurementType
             What kind of imputable attribute is this?
-        polars_value : Any
+        json_value : Any
             If the `value` is not something recorded directly in a dataframe,
-            this specifies how to compare to values in polars dataframes and
-            how to output this value to a dataframe.  None means to use the value.
+            this specifies how to compare to values in json and
+            how to output this value to a json.  None means to use the value.
         """
         assert value >= 0.0
         super().__init__(
             value=value,
             name=name,
             impute_action=impute_action,
-            polars_value=polars_value,
+            json_value=json_value,
         )
         self.measurement_type: MeasurementType = measurement_type
         assert self.measurement_type in get_args(MeasurementType)

@@ -1,11 +1,12 @@
 """
-Module for polars interface.
+Module for interfacing with JSON-style inputs.
 """
 
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from copy import deepcopy
-
-import polars as pl
+from itertools import groupby
+from operator import itemgetter
+from typing import Any
 
 from cfa_subgroup_imputer.groups import GroupMap
 from cfa_subgroup_imputer.imputer import (
@@ -22,9 +23,9 @@ from cfa_subgroup_imputer.variables import GroupableTypes
 
 
 def create_group_map(
-    supergroup_df: pl.DataFrame | None,
-    subgroup_df: pl.DataFrame | None,
-    subgroup_to_supergroup: pl.DataFrame | None,
+    supergroup_data: Iterable[dict[str, Any]] | None,
+    subgroup_data: Iterable[dict[str, Any]] | None,
+    subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
     supergroups_from: str,
     subgroups_from: str,
     group_type: GroupableTypes | None,
@@ -32,23 +33,25 @@ def create_group_map(
 ) -> GroupMap:
     if subgroup_to_supergroup is not None:
         sub_super_pairs = [
-            (row_dict[subgroups_from], row_dict[supergroups_from])
-            for row_dict in subgroup_to_supergroup.to_dicts()
+            (row[subgroups_from], row[supergroups_from])
+            for row in subgroup_to_supergroup
         ]
         return RaggedOuterProductSubgroupHandler().construct_group_map(
             category_combinations=sub_super_pairs,
             variable_names=[subgroups_from, supergroups_from],
         )
 
-    assert supergroup_df is not None, (
-        "If not supplying `subgroup_to_supergroup`, must supply `supergroup_df`."
+    assert supergroup_data is not None, (
+        "If not supplying `subgroup_to_supergroup`, must supply `supergroup_data`."
     )
-    assert subgroup_df is not None, (
-        "If not supplying `subgroup_to_supergroup`, must supply `subgroup_df`."
+    assert subgroup_data is not None, (
+        "If not supplying `subgroup_to_supergroup`, must supply `subgroup_data`."
     )
 
-    supergroup_cats = supergroup_df[supergroups_from].unique().to_list()
-    subgroup_cats = subgroup_df[subgroups_from].unique().to_list()
+    supergroup_cats = list(
+        set(row[supergroups_from] for row in supergroup_data)
+    )
+    subgroup_cats = list(set(row[subgroups_from] for row in subgroup_data))
     if group_type == "categorical":
         return OuterProductSubgroupHandler().construct_group_map(
             supergroup_categories=supergroup_cats,
@@ -61,7 +64,7 @@ def create_group_map(
         # TODO: we could rename this ourselves, instead of erroring out
         #       though then we'd have to tweak the written output at the end too
         assert supergroups_from == subgroups_from, (
-            "Age groups must be named identically in super and subgroup dataframes"
+            "Age groups must be named identically in super and subgroup data"
         )
         return AgeGroupHandler(
             age_max=kwargs.get("age_max", 100)
@@ -76,10 +79,9 @@ def create_group_map(
 
 
 def disaggregate(
-    supergroup_df: pl.DataFrame,
-    # TODO: we should perhaps let this be just a list of values for splitting on age
-    subgroup_df: pl.DataFrame,
-    subgroup_to_supergroup: pl.DataFrame | None,
+    supergroup_data: Iterable[dict[str, Any]],
+    subgroup_data: Iterable[dict[str, Any]],
+    subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
     supergroups_from: str,
     subgroups_from: str,
     group_type: GroupableTypes | None,
@@ -88,7 +90,7 @@ def disaggregate(
     count: Collection[str] = [],
     exclude: Collection[str] = [],
     **kwargs,
-) -> pl.DataFrame:
+) -> list[dict[str, Any]]:
     """
     Takes in a dataframe `df` with measurements for the `supergroups`.
     Imputes values for the subgroups and returns a dataframe with those.
@@ -98,13 +100,13 @@ def disaggregate(
 
     Returns
     -------
-    pl.DataFrame
-        Dataframe with measurements imputed for the subgroups.
+    list[dict[str, Any]]
+        Data with measurements imputed for the subgroups.
     """
 
     group_map = create_group_map(
-        supergroup_df=supergroup_df,
-        subgroup_df=subgroup_df,
+        supergroup_data=supergroup_data,
+        subgroup_data=subgroup_data,
         subgroup_to_supergroup=subgroup_to_supergroup,
         supergroups_from=supergroups_from,
         subgroups_from=subgroups_from,
@@ -119,7 +121,7 @@ def disaggregate(
     elif group_type == "age":
         # TODO: as above we could rename this ourselves
         assert supergroups_from == subgroups_from, (
-            "Age groups must be named identically in super and subgroup dataframes"
+            "Age groups must be named identically in super and subgroup data"
         )
         prop_calc = ProportionsFromContinuous(
             continuous_var_name=subgroups_from
@@ -129,72 +131,58 @@ def disaggregate(
 
     disaggregator = Disaggregator(proportion_calculator=prop_calc)
 
-    safe_loop_over = list(loop_over) + ["dummy"]
-    supergroup_df = supergroup_df.with_columns(dummy=pl.lit("dummy"))
-    subgroup_df = subgroup_df.with_columns(dummy=pl.lit("dummy"))
+    # Add a dummy variable to loop over if none are provided
+    safe_loop_over = list(loop_over) if loop_over else ["dummy"]
+    supergroup_data = [d | {"dummy": "dummy"} for d in supergroup_data]
+    subgroup_data = [d | {"dummy": "dummy"} for d in subgroup_data]
 
-    for grp_type, grp_info in {
-        "supergroup": {
-            "df": supergroup_df,
-            "groups_from": [supergroups_from],
-            "n_groups": len(group_map.supergroup_names),
-        },
-        "subgroup": {
-            "df": subgroup_df,
-            "groups_from": [subgroups_from] + [supergroups_from]
-            if group_type == "categorical"
-            else [subgroups_from],
-            "n_groups": len(group_map.subgroup_names()),
-        },
-    }.items():
-        assert (
-            missing := set(safe_loop_over).difference(grp_info["df"].columns)
-        ) == set(), (
-            f"Looping variables are missing from {grp_type} dataframe: {missing}"
-        )
-
-        assert (
-            grp_info["df"]
-            .select(safe_loop_over + grp_info["groups_from"])
-            .unique()
-            .shape[0]
-            == grp_info["df"].shape[0]
-        ), (
-            f"Dataframe has multiple entries for at least one combination of group-defining variables ({grp_info['groups_from']}) and variables to loop over ({loop_over}).\n{grp_info['df']}"
-        )
+    # Sort data for groupby
+    supergroup_data.sort(key=itemgetter(*safe_loop_over))
+    subgroup_data.sort(key=itemgetter(*safe_loop_over))
 
     # If we're not told what to do with the column, and it's not being used to compute proportions, copy it
     if subgroup_to_supergroup is not None or group_type == "categorical":
         ignore = [kwargs.get("size_from", "size")]
     elif group_type == "age":
         ignore = [kwargs.get("continuous_var_name", "age")]
+    else:
+        ignore = []
+
     copy = (
-        set(supergroup_df.columns)
+        set(supergroup_data[0].keys())
         .difference(safe_loop_over)
         .difference(exclude)
         .difference(rate)
         .difference(count)
         .difference(ignore)
-        # TODO: this is somewhat redundant with data_from_polars knowing not to copy group-defining variables
         .difference([supergroups_from])
     )
     disagg_df_comp = []
-    for supergroup_dfg, subgroup_dfg in zip(
-        supergroup_df.group_by(safe_loop_over),
-        subgroup_df.group_by(safe_loop_over),
+
+    super_grouper = groupby(supergroup_data, key=itemgetter(*safe_loop_over))
+    sub_grouper = groupby(subgroup_data, key=itemgetter(*safe_loop_over))
+
+    for (super_key, super_grp), (sub_key, sub_grp) in zip(
+        super_grouper, sub_grouper
     ):
+        assert super_key == sub_key, (
+            "Mismatch in looping variables between supergroup and subgroup data"
+        )
         grp_map = deepcopy(group_map)
 
-        grp_map.data_from_polars(
-            supergroup_dfg[1],
+        super_grp_list = list(super_grp)
+        sub_grp_list = list(sub_grp)
+
+        grp_map.data_from_dicts(
+            super_grp_list,
             "supergroup",
             copy=copy,
             exclude=exclude,
             count=count,
             rate=rate,
         )
-        grp_map.data_from_polars(
-            subgroup_dfg[1],
+        grp_map.data_from_dicts(
+            sub_grp_list,
             "subgroup",
             copy=copy,
             exclude=exclude,
@@ -203,6 +191,11 @@ def disaggregate(
         )
 
         disagg_map = disaggregator(grp_map)
-        disagg_df_comp.append(disagg_map.data_to_polars("subgroup"))
+        disagg_df_comp.extend(disagg_map.to_dicts("subgroup"))
 
-    return pl.concat(disagg_df_comp).drop("dummy")
+    # Remove dummy variable if it was added
+    if not loop_over:
+        for row in disagg_df_comp:
+            del row["dummy"]
+
+    return disagg_df_comp
