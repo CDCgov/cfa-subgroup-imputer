@@ -407,7 +407,8 @@ class GroupMap:
 
         keys = [
             key
-            for key in all_keys
+            # For consistent sorting
+            for key in data_list[0].keys()
             if ((key not in exclude) and (key not in filters))
         ]
 
