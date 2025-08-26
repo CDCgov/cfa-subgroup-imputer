@@ -142,7 +142,7 @@ In this case, it is assumed that the same weight model $\boldsymbol{\pi}(\mathbf
 ### Uniform density categorical disaggregation
 
 This is perhaps the simplest of all disaggregation cases.
-There is a single categorical subgrouping variable, and we have either proportion or count measurements for each subgroup.
+There is a single categorical subgrouping variable, and we have either rate or count measurements for each subgroup.
 Here we have
 ```math
 \pi_{ij} = \frac{x_{ij}}{\sum_j x_{ij}} = \frac{x_{ij}}{x_{i}}
@@ -213,15 +213,22 @@ Rearranging, we obtain
 \hat{y}_{ij} = \frac{x_{ij}}{x_i} \hat{y}_i
 ```
 which fits into the stated weight-based framework with $\pi_{ij} = x_{ij} / x_i$.
-It also fits into the categorical approach above if we define $w_ij$ to be 0 for all subgroups not contained within a supergroup, as $\sum_j x_{ij} = x_i$.
+It also fits into the categorical approach above if we define $w_{ij}$ to be 0 for all subgroups not contained within a supergroup, as $\sum_j x_{ij} = x_i$.
 Thus, this framework is also a uniform density approach.
 
 When is this approach useful?
-While it ends up in the same place as the categorical case, it is useful for understanding how to tackle subgroups based on, for example, age.
-In such a case, we have vaccination data on relatively large age subgroups, e.g. from [nis-py-api](https://github.com/CDCgov/nis-py-api).
+Consider that we have vaccination data on relatively large age subgroups, e.g. from [nis-py-api](https://github.com/CDCgov/nis-py-api).
 But if our model needs values on smaller groups, such as yearly age groups, we need to disaggregate it.
-The continuous variable component is probably mostly useful for hammering this problem into the correct shape for passing to a categorical-style imputer.
-But if we ever want to try non-uniform interpolation, either because another continuous variable $x_2(z)$ is in play or because we don't want to assume $y(z)$ is piecewise constant, we will start from here.
+In this case, the underlying continuous variable $z$ is age, and $y(z)$ is the vaccination _rate_ by age.
+The glue between vaccination rates and age is the _population density function_ $x(z)$.
+By integrating this function, we compute how many individuals there are in any age range, for example the number of 42 year olds is $\int_{42}^{43} x(z) \mathrm{d}z$.
+And by integrating the product of the population density and vaccination rate, we obtain the count of vaccinated individuals, for example the number of vaccinated 42 year olds is $\int_{42}^{43} y(z) x(z) \mathrm{d}z$.
+The vaccination rate _in a group_ is the ratio of these integrals, $\left( \int_{42}^{43} y(z) x(z) \mathrm{d}z \right) / \left( \int_{42}^{43}x(z) \mathrm{d}z \right)$.
+
+Computationally speaking, the continuous variable component is mostly useful for hammering this problem into the correct shape for passing to a categorical-style imputer.
+Mathematically speaking, going through these steps is crucial for understanding what we are actually doing, and thus preventing conceptual errors.
+Primarily, the math shows that while we might measure either a count or a rate in a supergroup, to disaggregate we must think about _rates_.
+In the future, if we ever want to move beyond disaggregation based on a single assumed-uniform covariate, either because another continuous variable $x_2(z)$ is in play or because we don't want to assume $y(z)$ is piecewise constant, we will start from the math above.
 
 #### A special case: when $x(z) = z$
 
