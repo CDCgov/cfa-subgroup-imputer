@@ -19,6 +19,7 @@ from cfa_subgroup_imputer.mapping import (
     OuterProductSubgroupHandler,
     RaggedOuterProductSubgroupHandler,
 )
+from cfa_subgroup_imputer.utils import get_json_keys, select, unique
 from cfa_subgroup_imputer.variables import GroupableTypes
 
 
@@ -82,6 +83,7 @@ def create_group_map(
 
 def disaggregate(
     supergroup_data: Iterable[dict[str, Any]],
+    # TODO: we should perhaps let this be just a list of values for splitting on age
     subgroup_data: Iterable[dict[str, Any]],
     subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
     supergroups_from: str,
@@ -138,6 +140,38 @@ def disaggregate(
     supergroup_data = [d | {"dummy": "dummy"} for d in supergroup_data]
     subgroup_data = [d | {"dummy": "dummy"} for d in subgroup_data]
 
+    for grp_type, grp_info in {
+        "supergroup": {
+            "data": supergroup_data,
+            "groups_from": [supergroups_from],
+            "n_groups": len(group_map.supergroup_names),
+        },
+        "subgroup": {
+            "data": subgroup_data,
+            "groups_from": [subgroups_from] + [supergroups_from]
+            if group_type == "categorical"
+            else [subgroups_from],
+            "n_groups": len(group_map.subgroup_names()),
+        },
+    }.items():
+        assert (
+            missing := set(safe_loop_over).difference(
+                get_json_keys(grp_info["data"])
+            )
+        ) == set(), (
+            f"Looping variables are missing from {grp_type} dataframe: {missing}"
+        )
+
+        assert len(
+            unique(
+                select(
+                    grp_info["data"], safe_loop_over + grp_info["groups_from"]
+                )
+            )
+        ) == len(grp_info["data"]), (
+            f"Provided data has multiple entries for at least one combination of group-defining variables ({grp_info['groups_from']}) and variables to loop over ({loop_over}).\n{grp_info['data']}"
+        )
+
     # Sort data for groupby
     supergroup_data.sort(key=itemgetter(*safe_loop_over))
     subgroup_data.sort(key=itemgetter(*safe_loop_over))
@@ -157,6 +191,7 @@ def disaggregate(
         .difference(rate)
         .difference(count)
         .difference(ignore)
+        # TODO: this is somewhat redundant with data_from_polars knowing not to copy group-defining variables
         .difference([supergroups_from])
     )
     disagg_comp = []

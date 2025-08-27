@@ -6,6 +6,7 @@ from collections import Counter
 from collections.abc import Container, Iterable, Mapping
 from typing import Any, Hashable, Literal, Self, get_args
 
+from cfa_subgroup_imputer.utils import get_json_keys
 from cfa_subgroup_imputer.variables import (
     Attribute,
     ImputableAttribute,
@@ -131,8 +132,9 @@ class Group:
         filtered_data = list(
             filter(
                 lambda row: all(
-                    row[_filter] == self.get_attribute(_filter).json_value
-                    for _filter in self.filter_on  # pyright: ignore[reportOptionalIterable]
+                    row[filter_key]
+                    == self.get_attribute(filter_key).json_value
+                    for filter_key in self.filter_on  # pyright: ignore[reportOptionalIterable]
                 ),
                 data,
             )
@@ -400,15 +402,9 @@ class GroupMap:
 
         data_list = list(data)
 
-        all_keys = set(data_list[0].keys())
-        assert all(set(datum.keys()) == all_keys for datum in data), (
-            "Provided data do not all have same keys."
-        )
-
         keys = [
             key
-            # For consistent sorting
-            for key in data_list[0].keys()
+            for key in get_json_keys(data)
             if ((key not in exclude) and (key not in filters))
         ]
 
