@@ -102,7 +102,6 @@ def test_groups_from_dicts(three_counties):
                     json_value="California",
                 ),
             ],
-            filter_on=["state"],
         ),
         "Washington": Group(
             name="Washington",
@@ -114,7 +113,6 @@ def test_groups_from_dicts(three_counties):
                     json_value="Washington",
                 ),
             ],
-            filter_on=["state"],
         ),
         ("Sutter", "California"): Group(
             name=("Sutter", "California"),
@@ -132,7 +130,6 @@ def test_groups_from_dicts(three_counties):
                     json_value="California",
                 ),
             ],
-            filter_on=["county", "state"],
         ),
         ("Skagit", "Washington"): Group(
             name=("Skagit", "Washington"),
@@ -150,7 +147,6 @@ def test_groups_from_dicts(three_counties):
                     json_value="Washington",
                 ),
             ],
-            filter_on=["county", "state"],
         ),
         ("San Juan", "Washington"): Group(
             name=("San Juan", "Washington"),
@@ -168,7 +164,6 @@ def test_groups_from_dicts(three_counties):
                     json_value="Washington",
                 ),
             ],
-            filter_on=["county", "state"],
         ),
     }
 
