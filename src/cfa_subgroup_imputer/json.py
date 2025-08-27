@@ -25,13 +25,16 @@ from cfa_subgroup_imputer.variables import GroupableTypes
 
 def create_group_map(
     supergroup_data: Iterable[dict[str, Any]] | None,
-    subgroup_data: Iterable[dict[str, Any]] | None,
+    subgroup_defs: Iterable[dict[str, Any]] | None,
     subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
     supergroups_from: str,
     subgroups_from: str,
     group_type: GroupableTypes | None,
     **kwargs,
 ) -> GroupMap:
+    """
+    GroupMap construction utility for `disaggregate`. See there for more details.
+    """
     if subgroup_to_supergroup is not None:
         sub_super_pairs = [
             (row[subgroups_from], row[supergroups_from])
@@ -45,15 +48,15 @@ def create_group_map(
     assert supergroup_data is not None, (
         "If not supplying `subgroup_to_supergroup`, must supply `supergroup_data`."
     )
-    assert subgroup_data is not None, (
-        "If not supplying `subgroup_to_supergroup`, must supply `subgroup_data`."
+    assert subgroup_defs is not None, (
+        "If not supplying `subgroup_to_supergroup`, must supply `subgroup_defs`."
     )
 
     supergroup_cats = sorted(
         list(set(row[supergroups_from] for row in supergroup_data))
     )
     subgroup_cats = sorted(
-        list(set(row[subgroups_from] for row in subgroup_data))
+        list(set(row[subgroups_from] for row in subgroup_defs))
     )
     if group_type == "categorical":
         return OuterProductSubgroupHandler().construct_group_map(
@@ -84,7 +87,7 @@ def create_group_map(
 def disaggregate(
     supergroup_data: Iterable[dict[str, Any]],
     # TODO: we should perhaps let this be just a list of values for splitting on age
-    subgroup_data: Iterable[dict[str, Any]],
+    subgroup_defs: Iterable[dict[str, Any]],
     subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
     supergroups_from: str,
     subgroups_from: str,
@@ -96,11 +99,38 @@ def disaggregate(
     **kwargs,
 ) -> list[dict[str, Any]]:
     """
-    Takes in a dataframe `df` with measurements for the `supergroups`.
-    Imputes values for the subgroups and returns a dataframe with those.
+    Takes in data for supergroups, imputes and returns values for the subgroups.
 
     Parameters
     ----------
+    supergroup_data: Iterable[dict[str, Any]]
+        Data for supergroups as list of dicts.
+    subgroup_defs: Iterable[dict[str, Any]]
+        Information defining the subgroups.
+    subgroup_to_supergroup: Iterable[dict[str, Any]] | None
+        Optional mapping defining all subgroup : supergroup.
+    supergroups_from: str
+        Name of key in `supergroup_data` defining supergroups.
+    subgroups_from: str
+        Name of key in `subgroup_defs` defining subgroups.
+    group_type: GroupableTypes | None
+        What kind of groups are these, categorical or age? Can only
+        be None if providing `subgroup_to_supergroup`.
+    loop_over: Collection[str] = []
+        A collection of covariates, within each combination of which
+        we will separately disaggregate. For example, if we wanted
+        to disaggregate age groups separately in every state and county
+        in a dataset, this would be ["state", "county"].
+    rate: Collection[str] = []
+        A list of the keys in `supergroup_data` which define rate measurements.
+    count: Collection[str] = []
+        A list of the keys in `supergroup_data` which define count measurements.
+    exclude: Collection[str] = []
+        A list the keys in `supergroup_data` which define variables
+        which are to be excluded from imputation and which will not
+        be present in the output.
+    **kwargs
+        Passed to internals.
 
     Returns
     -------
@@ -110,7 +140,7 @@ def disaggregate(
 
     group_map = create_group_map(
         supergroup_data=supergroup_data,
-        subgroup_data=subgroup_data,
+        subgroup_defs=subgroup_defs,
         subgroup_to_supergroup=subgroup_to_supergroup,
         supergroups_from=supergroups_from,
         subgroups_from=subgroups_from,
@@ -138,7 +168,7 @@ def disaggregate(
     # Add a dummy variable to loop over if none are provided
     safe_loop_over = list(loop_over) if loop_over else ["dummy"]
     supergroup_data = [d | {"dummy": "dummy"} for d in supergroup_data]
-    subgroup_data = [d | {"dummy": "dummy"} for d in subgroup_data]
+    subgroup_defs = [d | {"dummy": "dummy"} for d in subgroup_defs]
 
     for grp_type, grp_info in {
         "supergroup": {
@@ -147,7 +177,7 @@ def disaggregate(
             "n_groups": len(group_map.supergroup_names),
         },
         "subgroup": {
-            "data": subgroup_data,
+            "data": subgroup_defs,
             "groups_from": [subgroups_from] + [supergroups_from]
             if group_type == "categorical"
             else [subgroups_from],
@@ -159,7 +189,7 @@ def disaggregate(
                 get_json_keys(grp_info["data"])
             )
         ) == set(), (
-            f"Looping variables are missing from {grp_type} dataframe: {missing}"
+            f"Looping variables are missing from {grp_type} data: {missing}"
         )
 
         assert len(
@@ -174,7 +204,7 @@ def disaggregate(
 
     # Sort data for groupby
     supergroup_data.sort(key=itemgetter(*safe_loop_over))
-    subgroup_data.sort(key=itemgetter(*safe_loop_over))
+    subgroup_defs.sort(key=itemgetter(*safe_loop_over))
 
     # If we're not told what to do with the column, and it's not being used to compute proportions, copy it
     if subgroup_to_supergroup is not None or group_type == "categorical":
@@ -185,7 +215,7 @@ def disaggregate(
         ignore = []
 
     copy = (
-        set(supergroup_data[0].keys())
+        set(get_json_keys(supergroup_data))
         .difference(safe_loop_over)
         .difference(exclude)
         .difference(rate)
@@ -197,7 +227,7 @@ def disaggregate(
     disagg_comp = []
 
     super_grouper = groupby(supergroup_data, key=itemgetter(*safe_loop_over))
-    sub_grouper = groupby(subgroup_data, key=itemgetter(*safe_loop_over))
+    sub_grouper = groupby(subgroup_defs, key=itemgetter(*safe_loop_over))
 
     for (super_key, super_grp), (sub_key, sub_grp) in zip(
         super_grouper, sub_grouper
