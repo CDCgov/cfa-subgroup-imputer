@@ -18,7 +18,7 @@ def three_counties_sub_super_map():
 def three_counties(three_counties_sub_super_map):
     return create_group_map(
         supergroup_data=None,
-        subgroup_data=None,
+        subgroup_defs=None,
         subgroup_to_supergroup=three_counties_sub_super_map,
         supergroups_from="state",
         subgroups_from="county",
@@ -197,7 +197,7 @@ def test_data_io_categorical(three_counties, state_data):
 def test_data_io_age_groups(age_subgroups, age_group_data):
     age_group_map = create_group_map(
         supergroup_data=age_group_data,
-        subgroup_data=age_subgroups,
+        subgroup_defs=age_subgroups,
         subgroup_to_supergroup=None,
         supergroups_from="age_group",
         subgroups_from="age_group",
@@ -234,7 +234,7 @@ def test_data_io_age_groups(age_subgroups, age_group_data):
 
 
 def test_disagg_categorical(state_data):
-    subgroup_data = [
+    subgroup_defs = [
         {"state": "California", "splitvar": "cat1", "size": 20},
         {"state": "California", "splitvar": "cat2", "size": 20},
         {"state": "Washington", "splitvar": "cat1", "size": 2},
@@ -243,7 +243,7 @@ def test_disagg_categorical(state_data):
 
     disagg = disaggregate(
         supergroup_data=state_data,
-        subgroup_data=subgroup_data,
+        subgroup_defs=subgroup_defs,
         subgroup_to_supergroup=None,
         supergroups_from="state",
         subgroups_from="splitvar",
@@ -296,7 +296,7 @@ def test_disagg_categorical(state_data):
 def test_disagg_continuous_age(age_group_data, age_subgroups):
     disagg = disaggregate(
         supergroup_data=age_group_data,
-        subgroup_data=age_subgroups,
+        subgroup_defs=age_subgroups,
         subgroup_to_supergroup=None,
         supergroups_from="age_group",
         subgroups_from="age_group",
