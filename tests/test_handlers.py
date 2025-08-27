@@ -80,7 +80,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(0, 1),
                         impute_action="ignore",
-                        polars_value="0 years",
+                        json_value="0 years",
                     )
                 ],
             ),
@@ -91,7 +91,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(1, 2),
                         impute_action="ignore",
-                        polars_value="1-<2 years",
+                        json_value="1-<2 years",
                     )
                 ],
             ),
@@ -102,7 +102,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(0, 6.0 / 12.0),
                         impute_action="ignore",
-                        polars_value="0-<6 months",
+                        json_value="0-<6 months",
                     )
                 ],
             ),
@@ -113,7 +113,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(6.0 / 12.0, 1.0),
                         impute_action="ignore",
-                        polars_value="6 months-<1 year",
+                        json_value="6 months-<1 year",
                     )
                 ],
             ),
@@ -124,7 +124,7 @@ class TestAgeGroups:
                         name="age",
                         value=Range(1, 2),
                         impute_action="ignore",
-                        polars_value="1 year",
+                        json_value="1 year",
                     )
                 ],
             ),
@@ -158,6 +158,12 @@ class TestAgeGroups:
                 supergroups=["0 years", "2 years"],
                 subgroups=["0 years", "2 years"],
             )
+
+        # Order
+        subgroups_expected = subgroups
+        supergroups_expected = supergroups
+        assert group_map.supergroup_names == supergroups_expected
+        assert group_map.subgroup_names() == subgroups_expected
 
 
 class TestCategoroical:
@@ -276,3 +282,9 @@ class TestCategoroical:
 
         assert group_map.groups == groups_expected
         assert group_map.sub_to_super == map_expected
+
+        # Order
+        subgroups_expected = [k for k in map_expected.keys()]
+        supergroups_expected = supergroup_cats
+        assert group_map.supergroup_names == supergroups_expected
+        assert group_map.subgroup_names() == subgroups_expected
