@@ -155,6 +155,7 @@ class ImputableAttribute(Attribute):
         )
 
     def to_count(self, size: float) -> Self:
+        assert self.measurement_type in get_args(RateMeasurementType)
         return type(self)(
             value=self.value * size,
             name=self.name,
@@ -163,6 +164,7 @@ class ImputableAttribute(Attribute):
         )
 
     def to_rate(self, volume: float) -> Self:
+        assert self.measurement_type in get_args(CountMeasurementType)
         return type(self)(
             value=self.value / volume,
             name=self.name,
