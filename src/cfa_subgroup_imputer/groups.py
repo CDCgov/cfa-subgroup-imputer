@@ -291,7 +291,7 @@ class GroupMap:
         attribute_class: type[Attribute] | type[ImputableAttribute],
         measurement_type: MeasurementType | None = None,
         attribute_json_values: dict[Hashable, Any] | None = None,
-    ):
+    ) -> None:
         """
         Bulk addition of attributes to all sub or supergroups.
 

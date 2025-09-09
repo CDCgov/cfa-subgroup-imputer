@@ -141,7 +141,7 @@ class Aggregator:
             attribute_names = [a.name for a in subgroups[0].attributes]
 
             for nm in attribute_names:
-                self._aggregate_1(nm, supergroup, subgroups)
+                supergroup = self._aggregate_1(nm, supergroup, subgroups)
 
             groups.append(supergroup)
             for nm in map.subgroup_names(supergroup_name):
@@ -154,10 +154,11 @@ class Aggregator:
         attribute_name: Hashable,
         supergroup: Group,
         subgroups: Iterable[Group],
-    ):
+    ) -> Group:
         """
         Aggregate a single attribute from subgroups to supergroup.
         """
+        print(f"++++++++ _aggregate_1ing {attribute_name} for {supergroup}")
         subgroups = list(subgroups)
         assert len(subgroups) > 0, "Cannot aggregate non-existent subgroups."
         attr0 = subgroups[0].get_attribute(attribute_name)
@@ -170,7 +171,7 @@ class Aggregator:
             assert len(vals) == 1, (
                 f"Found multiple incompatible values for attribute named {attribute_name} in subgroups: {vals}"
             )
-            supergroup.add_attribute(attr0)
+            return supergroup.add_attribute(attr0)
         elif act0 == "impute":
             cmt = get_args(CountMeasurementType)
             assert isinstance(attr0, ImputableAttribute)
@@ -189,7 +190,7 @@ class Aggregator:
                     final_type = "count_from_rate"
                 val += attr.value
 
-            supergroup.add_attribute(
+            return supergroup.add_attribute(
                 ImputableAttribute(
                     value=val,
                     name=attribute_name,
@@ -197,5 +198,7 @@ class Aggregator:
                     measurement_type=final_type,
                 )
             )
-        elif act0 != "ignore":
+        elif act0 == "ignore":
+            return supergroup
+        else:
             raise RuntimeError(f"{act0} is not a valid ImputeAction.")
