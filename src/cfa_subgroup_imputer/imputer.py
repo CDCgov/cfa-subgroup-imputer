@@ -124,6 +124,9 @@ class Aggregator:
     A class which aggregates subgroups.
     """
 
+    def __init__(self, size_from: Hashable):
+        self.size_from = size_from
+
     def __call__(self, map: GroupMap) -> GroupMap:
         """
         Impute and disaggregate the given group map.
@@ -143,7 +146,7 @@ class Aggregator:
             for nm in attribute_names:
                 supergroup = self._aggregate_1(nm, supergroup, subgroups)
 
-            groups.append(supergroup)
+            groups.append(supergroup.restore_rates(self.size_from))
             for nm in map.subgroup_names(supergroup_name):
                 groups.append(map.group(nm))
 
@@ -158,7 +161,6 @@ class Aggregator:
         """
         Aggregate a single attribute from subgroups to supergroup.
         """
-        print(f"++++++++ _aggregate_1ing {attribute_name} for {supergroup}")
         subgroups = list(subgroups)
         assert len(subgroups) > 0, "Cannot aggregate non-existent subgroups."
         attr0 = subgroups[0].get_attribute(attribute_name)

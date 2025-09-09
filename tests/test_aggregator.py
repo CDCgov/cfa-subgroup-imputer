@@ -1,8 +1,11 @@
+from math import isclose
+
 from cfa_subgroup_imputer.imputer import Aggregator
 from cfa_subgroup_imputer.mapping import (
     AgeGroupHandler,
+    OuterProductSubgroupHandler,
 )
-from cfa_subgroup_imputer.variables import ImputableAttribute
+from cfa_subgroup_imputer.variables import Attribute, ImputableAttribute
 
 
 def test_aggregator_age_continuous():
@@ -35,7 +38,7 @@ def test_aggregator_age_continuous():
         measurement_type="count",
     )
 
-    aggregator = Aggregator()
+    aggregator = Aggregator(size_from="size")
     result_map = aggregator(group_map)
     print(result_map.group("0-17 years"))
 
@@ -48,121 +51,126 @@ def test_aggregator_age_continuous():
         )
 
 
-# def test_aggregator_outer_product():
-#     """
-#     Tests that the Aggregator correctly sums data from subgroups to supergroups.
-#     This test is the inverse of test_disaggregator_outer_product.
-#     """
-#     supergroup_categories = ["Region1", "Region2"]
-#     subgroup_categories = [["Low", "High"]]
-#     supergroup_variable_name = "region"
-#     subgroup_variable_names = ["income"]
+def test_aggregator_outer_product():
+    supergroup_categories = ["Region1", "Region2"]
+    subgroup_categories = [["Low", "High"]]
+    supergroup_variable_name = "region"
+    subgroup_variable_names = ["income"]
 
-#     handler = OuterProductSubgroupHandler()
-#     group_map = handler.construct_group_map(
-#         supergroup_categories=supergroup_categories,
-#         subgroup_categories=subgroup_categories,
-#         supergroup_variable_name=supergroup_variable_name,
-#         subgroup_variable_names=subgroup_variable_names,
-#     )
+    handler = OuterProductSubgroupHandler()
+    group_map = handler.construct_group_map(
+        supergroup_categories=supergroup_categories,
+        subgroup_categories=subgroup_categories,
+        supergroup_variable_name=supergroup_variable_name,
+        subgroup_variable_names=subgroup_variable_names,
+    )
 
-#     subgroup_sizes = {
-#         ("Low", "Region1"): 40,
-#         ("High", "Region1"): 60,
-#         ("Low", "Region2"): 80,
-#         ("High", "Region2"): 120,
-#     }
-#     group_map.add_attribute(
-#         group_type="subgroup",
-#         attribute_name="size",
-#         attribute_values=subgroup_sizes,
-#         impute_action="ignore",
-#         attribute_class=Attribute,
-#     )
+    supergroup_sizes = {"Region1": 100, "Region2": 200}
+    group_map.add_attribute(
+        group_type="supergroup",
+        attribute_name="size",
+        attribute_values=supergroup_sizes,
+        impute_action="ignore",
+        attribute_class=Attribute,
+    )
 
-#     subgroup_cases = {
-#         ("Low", "Region1"): 4.0,
-#         ("High", "Region1"): 6.0,
-#         ("Low", "Region2"): 20.0,
-#         ("High", "Region2"): 30.0,
-#     }
-#     group_map.add_attribute(
-#         group_type="subgroup",
-#         attribute_name="cases",
-#         attribute_values=subgroup_cases,
-#         impute_action="impute",
-#         attribute_class=ImputableAttribute,
-#         measurement_type="count",
-#     )
+    subgroup_sizes = {
+        ("Low", "Region1"): 40,
+        ("High", "Region1"): 60,
+        ("Low", "Region2"): 80,
+        ("High", "Region2"): 120,
+    }
+    group_map.add_attribute(
+        group_type="subgroup",
+        attribute_name="size",
+        attribute_values=subgroup_sizes,
+        impute_action="ignore",
+        attribute_class=Attribute,
+    )
 
-#     vax_rate_sub = {
-#         ("Low", "Region1"): 0.5,
-#         ("High", "Region1"): 0.5,
-#         ("Low", "Region2"): 0.8,
-#         ("High", "Region2"): 0.8,
-#     }
-#     group_map.add_attribute(
-#         group_type="subgroup",
-#         attribute_name="vaccination_rate",
-#         attribute_values=vax_rate_sub,
-#         impute_action="impute",
-#         attribute_class=ImputableAttribute,
-#         measurement_type="rate",
-#     )
+    subgroup_cases = {
+        ("Low", "Region1"): 4.0,
+        ("High", "Region1"): 6.0,
+        ("Low", "Region2"): 20.0,
+        ("High", "Region2"): 30.0,
+    }
+    group_map.add_attribute(
+        group_type="subgroup",
+        attribute_name="cases",
+        attribute_values=subgroup_cases,
+        impute_action="impute",
+        attribute_class=ImputableAttribute,
+        measurement_type="count",
+    )
 
-#     collection_date_sub = {
-#         ("Low", "Region1"): "2024-01-01",
-#         ("High", "Region1"): "2024-01-01",
-#         ("Low", "Region2"): "2024-01-02",
-#         ("High", "Region2"): "2024-01-02",
-#     }
-#     group_map.add_attribute(
-#         group_type="subgroup",
-#         attribute_name="collection_date",
-#         attribute_values=collection_date_sub,
-#         impute_action="copy",
-#         attribute_class=Attribute,
-#     )
+    vax_rate_sub = {
+        ("Low", "Region1"): 0.5,
+        ("High", "Region1"): 0.5,
+        ("Low", "Region2"): 0.8,
+        ("High", "Region2"): 0.8,
+    }
+    group_map.add_attribute(
+        group_type="subgroup",
+        attribute_name="vaccination_rate",
+        attribute_values=vax_rate_sub,
+        impute_action="impute",
+        attribute_class=ImputableAttribute,
+        measurement_type="rate",
+    )
 
-#     notes_sub = {
-#         ("Low", "Region1"): "foo",
-#         ("High", "Region1"): "bar",
-#         ("Low", "Region2"): "baz",
-#         ("High", "Region2"): "qux",
-#     }
-#     group_map.add_attribute(
-#         group_type="subgroup",
-#         attribute_name="notes",
-#         attribute_values=notes_sub,
-#         impute_action="ignore",
-#         attribute_class=Attribute,
-#     )
+    collection_date_sub = {
+        ("Low", "Region1"): "2024-01-01",
+        ("High", "Region1"): "2024-01-01",
+        ("Low", "Region2"): "2024-01-02",
+        ("High", "Region2"): "2024-01-02",
+    }
+    group_map.add_attribute(
+        group_type="subgroup",
+        attribute_name="collection_date",
+        attribute_values=collection_date_sub,
+        impute_action="copy",
+        attribute_class=Attribute,
+    )
 
-#     aggregator = Aggregator()
-#     result = aggregator(group_map)
+    notes_sub = {
+        ("Low", "Region1"): "foo",
+        ("High", "Region1"): "bar",
+        ("Low", "Region2"): "baz",
+        ("High", "Region2"): "qux",
+    }
+    group_map.add_attribute(
+        group_type="subgroup",
+        attribute_name="notes",
+        attribute_values=notes_sub,
+        impute_action="ignore",
+        attribute_class=Attribute,
+    )
 
-#     expected_cases = {"Region1": 10, "Region2": 50}
-#     expected_vax_rates = {"Region1": 0.5, "Region2": 0.8}
-#     expected_collection_dates = {
-#         "Region1": "2024-01-01",
-#         "Region2": "2024-01-02",
-#     }
+    aggregator = Aggregator(size_from="size")
+    result = aggregator(group_map)
 
-#     for region in ["Region1", "Region2"]:
-#         assert (
-#             result.group(region).get_attribute("cases").value
-#             == expected_cases[region]
-#         )
-#         assert (
-#             result.group(region).get_attribute("vaccination_rate").value
-#             == expected_vax_rates[region]
-#         )
-#         assert (
-#             result.group(region).get_attribute("collection_date").value
-#             == expected_collection_dates[region]
-#         )
+    expected_cases = {"Region1": 10, "Region2": 50}
+    expected_vax_rates = {"Region1": 0.5, "Region2": 0.8}
+    expected_collection_dates = {
+        "Region1": "2024-01-01",
+        "Region2": "2024-01-02",
+    }
 
-#     assert all(
-#         result.group(sg)._get_attribute("notes") is None
-#         for sg in result.supergroup_names
-#     )
+    for region in ["Region1", "Region2"]:
+        assert isclose(
+            result.group(region).get_attribute("cases").value,
+            expected_cases[region],
+        )
+        assert isclose(
+            result.group(region).get_attribute("vaccination_rate").value,
+            expected_vax_rates[region],
+        )
+        assert (
+            result.group(region).get_attribute("collection_date").value
+            == expected_collection_dates[region]
+        )
+
+    assert all(
+        result.group(sg)._get_attribute("notes") is None
+        for sg in result.supergroup_names
+    )
