@@ -1,7 +1,7 @@
 import pytest
 
 from cfa_subgroup_imputer.groups import Group
-from cfa_subgroup_imputer.json import create_group_map, disaggregate
+from cfa_subgroup_imputer.json import aggregate, create_group_map, disaggregate
 from cfa_subgroup_imputer.variables import Attribute
 
 
@@ -340,4 +340,136 @@ def test_disagg_continuous_age(age_group_data, age_subgroups):
     ]
 
     for od, ed in zip(disagg, expected_disagg):
+        assert od == pytest.approx(ed)
+
+
+def test_agg_categorical(state_data):
+    supergroup_data = [
+        {
+            "state": "California",
+            "size": 40,
+        },
+        {
+            "state": "Washington",
+            "size": 8,
+        },
+    ]
+    subgroup_data = [
+        {
+            "splitvar": "cat1",
+            "state": "California",
+            "size": 20,
+            "flower": "Eschscholzia californica",
+            "some_rate": 1.2,
+            "some_count": 5.0,
+            "to_exclude": "foo",
+            "to_ignore": "bar",
+        },
+        {
+            "splitvar": "cat2",
+            "state": "California",
+            "size": 20,
+            "flower": "Eschscholzia californica",
+            "some_rate": 1.2,
+            "some_count": 5.0,
+            "to_exclude": "foz",
+            "to_ignore": "baz",
+        },
+        {
+            "splitvar": "cat1",
+            "state": "Washington",
+            "size": 2,
+            "flower": "Rhododendron macrophyllum",
+            "some_rate": 1.3,
+            "some_count": 5.0,
+            "to_exclude": "foo",
+            "to_ignore": "bar",
+        },
+        {
+            "splitvar": "cat2",
+            "state": "Washington",
+            "size": 6,
+            "flower": "Rhododendron macrophyllum",
+            "some_rate": 1.3,
+            "some_count": 15.0,
+            "to_exclude": "foz",
+            "to_ignore": "baz",
+        },
+    ]
+
+    agg = aggregate(
+        supergroup_data=supergroup_data,
+        subgroup_defs=subgroup_data,
+        subgroup_to_supergroup=None,
+        supergroups_from="state",
+        subgroups_from="splitvar",
+        group_type="categorical",
+        loop_over=[],
+        rate=["some_rate"],
+        count=["some_count"],
+        exclude=["to_exclude", "to_ignore"],
+    )
+
+    for od, ed in zip(agg, state_data):
+        ed.pop("to_ignore")
+        ed.pop("to_exclude")
+        assert od == pytest.approx(ed)
+
+
+def test_agg_continuous_age(age_group_data):
+    supergroup_data = [
+        {
+            "age_group": "0-17 years",
+        },
+        {
+            "age_group": "18+ years",
+        },
+    ]
+    subgroup_data = [
+        {
+            "age_group": "0-4 years",
+            "size": 500.0,
+            "cases": 50.0,
+            "vaccination_rate": 0.4,
+            "collection_date": "2024-01-01",
+        },
+        {
+            "age_group": "5-17 years",
+            "size": 1300.0,
+            "cases": 130.0,
+            "vaccination_rate": 0.4,
+            "collection_date": "2024-01-01",
+        },
+        {
+            "age_group": "18-64 years",
+            "size": 4700.0,
+            "cases": 470.0,
+            "vaccination_rate": 0.8,
+            "collection_date": "2024-01-01",
+        },
+        {
+            "age_group": "65+ years",
+            "size": 3500.0,
+            "cases": 350.0,
+            "vaccination_rate": 0.8,
+            "collection_date": "2024-01-01",
+        },
+    ]
+
+    agg = aggregate(
+        supergroup_data=supergroup_data,
+        subgroup_defs=subgroup_data,
+        subgroup_to_supergroup=None,
+        supergroups_from="age_group",
+        subgroups_from="age_group",
+        group_type="age",
+        loop_over=[],
+        rate=["vaccination_rate"],
+        count=["cases", "size"],
+        copy=["collection_date"],
+    )
+
+    for od, ed in zip(agg, age_group_data):
+        ed.pop("notes")
+        ed.pop("to_exclude")
         assert od == pytest.approx(ed)
