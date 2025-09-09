@@ -26,7 +26,7 @@ from cfa_subgroup_imputer.variables import GroupableTypes
 
 def create_group_map(
     supergroup_data: Iterable[dict[str, Any]] | None,
-    subgroup_defs: Iterable[dict[str, Any]] | None,
+    subgroup_data: Iterable[dict[str, Any]] | None,
     subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
     supergroups_from: str,
     subgroups_from: str,
@@ -49,15 +49,15 @@ def create_group_map(
     assert supergroup_data is not None, (
         "If not supplying `subgroup_to_supergroup`, must supply `supergroup_data`."
     )
-    assert subgroup_defs is not None, (
-        "If not supplying `subgroup_to_supergroup`, must supply `subgroup_defs`."
+    assert subgroup_data is not None, (
+        "If not supplying `subgroup_to_supergroup`, must supply `subgroup_data`."
     )
 
     supergroup_cats = sorted(
         list(set(row[supergroups_from] for row in supergroup_data))
     )
     subgroup_cats = sorted(
-        list(set(row[subgroups_from] for row in subgroup_defs))
+        list(set(row[subgroups_from] for row in subgroup_data))
     )
     if group_type == "categorical":
         return OuterProductSubgroupHandler().construct_group_map(
@@ -101,10 +101,12 @@ def impute(
     **kwargs,
 ) -> list[dict[str, Any]]:
     """
-    Takes in data for supergroups, imputes and returns values for the subgroups.
+    Takes in data for supergroups/subgroups, imputes and returns values for the subgroups/supergroups.
 
     Parameters
     ----------
+    action: Literal["aggregate", "disaggregate"]
+        Whether to aggregate or disaggregate.
     supergroup_data: Iterable[dict[str, Any]]
         Information defining supergroups, including any data to disaggregate.
     subgroup_data: Iterable[dict[str, Any]]
@@ -114,12 +116,10 @@ def impute(
     supergroups_from: str
         Name of key in `supergroup_data` defining supergroups.
     subgroups_from: str
-        Name of key in `subgroup_defs` defining subgroups.
+        Name of key in `subgroup_data` defining subgroups.
     group_type: GroupableTypes | None
         What kind of groups are these, categorical or age? Can only
         be None if providing `subgroup_to_supergroup`.
-    action: Literal["aggregate", "disaggregate"]
-        Whether to aggregate or disaggregate.
     loop_over: Collection[str] = []
         A collection of covariates, within each combination of which
         we will separately disaggregate. For example, if we wanted
@@ -144,7 +144,7 @@ def impute(
 
     group_map = create_group_map(
         supergroup_data=supergroup_data,
-        subgroup_defs=subgroup_data,
+        subgroup_data=subgroup_data,
         subgroup_to_supergroup=subgroup_to_supergroup,
         supergroups_from=supergroups_from,
         subgroups_from=subgroups_from,
@@ -285,8 +285,9 @@ def impute(
 
 
 def aggregate(
+    # TODO: we should perhaps let this be just a list of values for aggregating on age, or some simple categorical cases
     supergroup_data: Iterable[dict[str, Any]],
-    subgroup_defs: Iterable[dict[str, Any]],
+    subgroup_data: Iterable[dict[str, Any]],
     subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
     supergroups_from: str,
     subgroups_from: str,
@@ -304,7 +305,7 @@ def aggregate(
     return impute(
         action="aggregate",
         supergroup_data=supergroup_data,
-        subgroup_data=subgroup_defs,
+        subgroup_data=subgroup_data,
         subgroup_to_supergroup=subgroup_to_supergroup,
         supergroups_from=supergroups_from,
         subgroups_from=subgroups_from,
@@ -320,7 +321,8 @@ def aggregate(
 
 def disaggregate(
     supergroup_data: Iterable[dict[str, Any]],
-    subgroup_defs: Iterable[dict[str, Any]],
+    # TODO: we should perhaps let this be just a list of values for splitting on age
+    subgroup_data: Iterable[dict[str, Any]],
     subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
     supergroups_from: str,
     subgroups_from: str,
@@ -338,7 +340,7 @@ def disaggregate(
     return impute(
         action="disaggregate",
         supergroup_data=supergroup_data,
-        subgroup_data=subgroup_defs,
+        subgroup_data=subgroup_data,
         subgroup_to_supergroup=subgroup_to_supergroup,
         supergroups_from=supergroups_from,
         subgroups_from=subgroups_from,
