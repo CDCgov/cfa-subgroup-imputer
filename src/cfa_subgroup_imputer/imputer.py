@@ -144,7 +144,9 @@ class Aggregator:
             attribute_names = [a.name for a in subgroups[0].attributes]
 
             for nm in attribute_names:
-                supergroup = self._aggregate_1(nm, supergroup, subgroups)
+                supergroup = self._aggregate_one_attribute(
+                    nm, supergroup, subgroups
+                )
 
             groups.append(supergroup.restore_rates(self.size_from))
             for nm in map.subgroup_names(supergroup_name):
@@ -152,7 +154,7 @@ class Aggregator:
 
         return GroupMap(sub_to_super, groups)
 
-    def _aggregate_1(
+    def _aggregate_one_attribute(
         self,
         attribute_name: Hashable,
         supergroup: Group,
