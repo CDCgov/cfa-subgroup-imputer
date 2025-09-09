@@ -99,7 +99,7 @@ class Disaggregator:
 
     def __call__(self, map: GroupMap) -> GroupMap:
         """
-        Impute and aggregate the given group map.
+        Impute and disaggregate the given group map.
         """
 
         sub_to_super = map.sub_to_super
@@ -129,7 +129,7 @@ class Aggregator:
 
     def __call__(self, map: GroupMap) -> GroupMap:
         """
-        Impute and disaggregate the given group map.
+        Impute and aggregate the given group map.
         """
 
         sub_to_super = map.sub_to_super
