@@ -6,10 +6,11 @@ from collections.abc import Collection, Iterable
 from copy import deepcopy
 from itertools import groupby
 from operator import itemgetter
-from typing import Any
+from typing import Any, Literal
 
 from cfa_subgroup_imputer.groups import GroupMap
 from cfa_subgroup_imputer.imputer import (
+    Aggregator,
     Disaggregator,
     ProportionsFromCategories,
     ProportionsFromContinuous,
@@ -25,7 +26,7 @@ from cfa_subgroup_imputer.variables import GroupableTypes
 
 def create_group_map(
     supergroup_data: Iterable[dict[str, Any]] | None,
-    subgroup_defs: Iterable[dict[str, Any]] | None,
+    subgroup_data: Iterable[dict[str, Any]] | None,
     subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
     supergroups_from: str,
     subgroups_from: str,
@@ -48,15 +49,15 @@ def create_group_map(
     assert supergroup_data is not None, (
         "If not supplying `subgroup_to_supergroup`, must supply `supergroup_data`."
     )
-    assert subgroup_defs is not None, (
-        "If not supplying `subgroup_to_supergroup`, must supply `subgroup_defs`."
+    assert subgroup_data is not None, (
+        "If not supplying `subgroup_to_supergroup`, must supply `subgroup_data`."
     )
 
     supergroup_cats = sorted(
         list(set(row[supergroups_from] for row in supergroup_data))
     )
     subgroup_cats = sorted(
-        list(set(row[subgroups_from] for row in subgroup_defs))
+        list(set(row[subgroups_from] for row in subgroup_data))
     )
     if group_type == "categorical":
         return OuterProductSubgroupHandler().construct_group_map(
@@ -84,10 +85,10 @@ def create_group_map(
         raise RuntimeError(f"Unknown grouping variable type {group_type}")
 
 
-def disaggregate(
+def impute(
+    action: Literal["aggregate", "disaggregate"],
     supergroup_data: Iterable[dict[str, Any]],
-    # TODO: we should perhaps let this be just a list of values for splitting on age
-    subgroup_defs: Iterable[dict[str, Any]],
+    subgroup_data: Iterable[dict[str, Any]],
     subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
     supergroups_from: str,
     subgroups_from: str,
@@ -96,23 +97,26 @@ def disaggregate(
     rate: Collection[str] = [],
     count: Collection[str] = [],
     exclude: Collection[str] = [],
+    size_from: str = "size",
     **kwargs,
 ) -> list[dict[str, Any]]:
     """
-    Takes in data for supergroups, imputes and returns values for the subgroups.
+    Takes in data for supergroups/subgroups, imputes and returns values for the subgroups/supergroups.
 
     Parameters
     ----------
+    action: Literal["aggregate", "disaggregate"]
+        Whether to aggregate or disaggregate.
     supergroup_data: Iterable[dict[str, Any]]
-        Data for supergroups as list of dicts.
-    subgroup_defs: Iterable[dict[str, Any]]
-        Information defining the subgroups.
+        Information defining supergroups, including any data to disaggregate.
+    subgroup_data: Iterable[dict[str, Any]]
+        Information defining the subgroups, including any data to aggregate.
     subgroup_to_supergroup: Iterable[dict[str, Any]] | None
         Optional mapping defining all subgroup : supergroup.
     supergroups_from: str
         Name of key in `supergroup_data` defining supergroups.
     subgroups_from: str
-        Name of key in `subgroup_defs` defining subgroups.
+        Name of key in `subgroup_data` defining subgroups.
     group_type: GroupableTypes | None
         What kind of groups are these, categorical or age? Can only
         be None if providing `subgroup_to_supergroup`.
@@ -140,7 +144,7 @@ def disaggregate(
 
     group_map = create_group_map(
         supergroup_data=supergroup_data,
-        subgroup_defs=subgroup_defs,
+        subgroup_data=subgroup_data,
         subgroup_to_supergroup=subgroup_to_supergroup,
         supergroups_from=supergroups_from,
         subgroups_from=subgroups_from,
@@ -148,27 +152,36 @@ def disaggregate(
         **kwargs,
     )
 
-    if subgroup_to_supergroup is not None or group_type == "categorical":
-        prop_calc = ProportionsFromCategories(
-            size_from=kwargs.get("size_from", "size")
-        )
-    elif group_type == "age":
-        # TODO: as above we could rename this ourselves
-        assert supergroups_from == subgroups_from, (
-            "Age groups must be named identically in super and subgroup data"
-        )
-        prop_calc = ProportionsFromContinuous(
-            continuous_var_name=subgroups_from
-        )
+    if action == "aggregate":
+        imputer = Aggregator(size_from)
+        output_level = "supergroup"
+    elif action == "disaggregate":
+        if subgroup_to_supergroup is not None or group_type == "categorical":
+            prop_calc = ProportionsFromCategories(size_from=size_from)
+        elif group_type == "age":
+            # TODO: as above we could rename this ourselves
+            assert supergroups_from == subgroups_from, (
+                "Age groups must be named identically in super and subgroup data"
+            )
+            prop_calc = ProportionsFromContinuous(
+                continuous_var_name=subgroups_from
+            )
+        else:
+            raise RuntimeError(f"Unknown grouping variable type {group_type}")
+        imputer = Disaggregator(proportion_calculator=prop_calc)
+        output_level = "subgroup"
     else:
-        raise RuntimeError(f"Unknown grouping variable type {group_type}")
-
-    disaggregator = Disaggregator(proportion_calculator=prop_calc)
+        raise ValueError(f"Unknown action {action}")
 
     # Add a dummy variable to loop over if none are provided
-    safe_loop_over = list(loop_over) if loop_over else ["dummy"]
-    supergroup_data = [d | {"dummy": "dummy"} for d in supergroup_data]
-    subgroup_defs = [d | {"dummy": "dummy"} for d in subgroup_defs]
+    if not loop_over:
+        safe_loop_over = ["dummy"]
+        supergroup_data = [d | {"dummy": "dummy"} for d in supergroup_data]
+        subgroup_data = [d | {"dummy": "dummy"} for d in subgroup_data]
+    else:
+        safe_loop_over = list(loop_over)
+        supergroup_data = [d for d in supergroup_data]
+        subgroup_data = [d for d in subgroup_data]
 
     for grp_type, grp_info in {
         "supergroup": {
@@ -177,7 +190,7 @@ def disaggregate(
             "n_groups": len(group_map.supergroup_names),
         },
         "subgroup": {
-            "data": subgroup_defs,
+            "data": subgroup_data,
             "groups_from": [subgroups_from] + [supergroups_from]
             if group_type == "categorical"
             else [subgroups_from],
@@ -202,32 +215,38 @@ def disaggregate(
             f"Provided data has multiple entries for at least one combination of group-defining variables ({grp_info['groups_from']}) and variables to loop over ({loop_over}).\n{grp_info['data']}"
         )
 
-    # Sort data for groupby
     supergroup_data.sort(key=itemgetter(*safe_loop_over))
-    subgroup_defs.sort(key=itemgetter(*safe_loop_over))
+    subgroup_data.sort(key=itemgetter(*safe_loop_over))
 
     # If we're not told what to do with the column, and it's not being used to compute proportions, copy it
     if subgroup_to_supergroup is not None or group_type == "categorical":
-        ignore = [kwargs.get("size_from", "size")]
+        ignore = [size_from]
     elif group_type == "age":
         ignore = [kwargs.get("continuous_var_name", "age")]
     else:
         ignore = []
 
+    if action == "aggregate":
+        copy_from = subgroup_data
+        groups_from = subgroups_from
+    else:
+        copy_from = supergroup_data
+        groups_from = supergroups_from
+
     copy = (
-        set(get_json_keys(supergroup_data))
+        set(get_json_keys(copy_from))
         .difference(safe_loop_over)
         .difference(exclude)
         .difference(rate)
         .difference(count)
         .difference(ignore)
-        # TODO: this is somewhat redundant with data_from_polars knowing not to copy group-defining variables
-        .difference([supergroups_from])
+        # TODO: this is somewhat redundant with data_from_json knowing not to copy group-defining variables
+        .difference([groups_from])
     )
-    disagg_comp = []
+    imputed_comp = []
 
     super_grouper = groupby(supergroup_data, key=itemgetter(*safe_loop_over))
-    sub_grouper = groupby(subgroup_defs, key=itemgetter(*safe_loop_over))
+    sub_grouper = groupby(subgroup_data, key=itemgetter(*safe_loop_over))
 
     for (super_key, super_grp), (sub_key, sub_grp) in zip(
         super_grouper, sub_grouper
@@ -254,12 +273,82 @@ def disaggregate(
             rate=rate,
         )
 
-        disagg_map = disaggregator(grp_map)
-        disagg_comp.extend(disagg_map.to_dicts("subgroup"))
+        imputed_map = imputer(grp_map)
+        imputed_comp.extend(imputed_map.to_dicts(output_level))
 
     # Remove dummy variable if it was added
     if not loop_over:
-        for row in disagg_comp:
+        for row in imputed_comp:
             del row["dummy"]
 
-    return disagg_comp
+    return imputed_comp
+
+
+def aggregate(
+    # TODO: we should perhaps let this be just a list of values for aggregating on age, or some simple categorical cases
+    supergroup_data: Iterable[dict[str, Any]],
+    subgroup_data: Iterable[dict[str, Any]],
+    subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
+    supergroups_from: str,
+    subgroups_from: str,
+    group_type: GroupableTypes | None,
+    loop_over: Collection[str] = [],
+    rate: Collection[str] = [],
+    count: Collection[str] = [],
+    exclude: Collection[str] = [],
+    size_from: str = "size",
+    **kwargs,
+) -> list[dict[str, Any]]:
+    """
+    Wrapper for `impute` with `action="aggregate"`.
+    """
+    return impute(
+        action="aggregate",
+        supergroup_data=supergroup_data,
+        subgroup_data=subgroup_data,
+        subgroup_to_supergroup=subgroup_to_supergroup,
+        supergroups_from=supergroups_from,
+        subgroups_from=subgroups_from,
+        group_type=group_type,
+        loop_over=loop_over,
+        rate=rate,
+        count=count,
+        exclude=exclude,
+        size_from=size_from,
+        **kwargs,
+    )
+
+
+def disaggregate(
+    supergroup_data: Iterable[dict[str, Any]],
+    # TODO: we should perhaps let this be just a list of values for splitting on age
+    subgroup_data: Iterable[dict[str, Any]],
+    subgroup_to_supergroup: Iterable[dict[str, Any]] | None,
+    supergroups_from: str,
+    subgroups_from: str,
+    group_type: GroupableTypes | None,
+    loop_over: Collection[str] = [],
+    rate: Collection[str] = [],
+    count: Collection[str] = [],
+    exclude: Collection[str] = [],
+    size_from: str = "size",
+    **kwargs,
+) -> list[dict[str, Any]]:
+    """
+    Wrapper for `impute` with `action="disaggregate"`.
+    """
+    return impute(
+        action="disaggregate",
+        supergroup_data=supergroup_data,
+        subgroup_data=subgroup_data,
+        subgroup_to_supergroup=subgroup_to_supergroup,
+        supergroups_from=supergroups_from,
+        subgroups_from=subgroups_from,
+        group_type=group_type,
+        loop_over=loop_over,
+        rate=rate,
+        count=count,
+        exclude=exclude,
+        size_from=size_from,
+        **kwargs,
+    )

@@ -76,6 +76,11 @@ class Attribute:
             and self.impute_action == x.impute_action
         )
 
+    def __hash__(self):
+        return hash(
+            (self.value, self.json_value, self.name, self.impute_action)
+        )
+
     def __repr__(self):
         return f"Attribute(name={self.name}, impute_action={self.impute_action}, value={self.value}, json_value={self.json_value})"
 
@@ -146,6 +151,17 @@ class ImputableAttribute(Attribute):
             super().__eq__(x) and self.measurement_type == x.measurement_type
         )
 
+    def __hash__(self):
+        return hash(
+            (
+                self.value,
+                self.json_value,
+                self.name,
+                self.impute_action,
+                self.measurement_type,
+            )
+        )
+
     def __mul__(self, k: float) -> Self:
         return type(self)(
             value=self.value * k,
@@ -155,6 +171,7 @@ class ImputableAttribute(Attribute):
         )
 
     def to_count(self, size: float) -> Self:
+        assert self.measurement_type in get_args(RateMeasurementType)
         return type(self)(
             value=self.value * size,
             name=self.name,
@@ -163,6 +180,7 @@ class ImputableAttribute(Attribute):
         )
 
     def to_rate(self, volume: float) -> Self:
+        assert self.measurement_type in get_args(CountMeasurementType)
         return type(self)(
             value=self.value / volume,
             name=self.name,

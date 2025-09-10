@@ -2,14 +2,20 @@
 Module for imputation machinery.
 """
 
+from collections.abc import Iterable
 from math import isclose
-from typing import Hashable, Protocol
+from typing import Hashable, Protocol, get_args
 
 from cfa_subgroup_imputer.groups import (
     Group,
     GroupMap,
 )
-from cfa_subgroup_imputer.variables import Range, assert_range_spanned_exactly
+from cfa_subgroup_imputer.variables import (
+    CountMeasurementType,
+    ImputableAttribute,
+    Range,
+    assert_range_spanned_exactly,
+)
 
 
 class ProportionCalculator(Protocol):
@@ -111,3 +117,92 @@ class Disaggregator:
                 )
 
         return GroupMap(sub_to_super, groups)
+
+
+class Aggregator:
+    """
+    A class which aggregates subgroups.
+    """
+
+    def __init__(self, size_from: Hashable):
+        self.size_from = size_from
+
+    def __call__(self, map: GroupMap) -> GroupMap:
+        """
+        Impute and aggregate the given group map.
+        """
+
+        sub_to_super = map.sub_to_super
+        groups = []
+
+        for supergroup_name in map.supergroup_names:
+            supergroup = map.group(supergroup_name)
+            subgroups = [
+                map.group(nm).rate_to_count()
+                for nm in map.subgroup_names(supergroup_name)
+            ]
+            attribute_names = [a.name for a in subgroups[0].attributes]
+
+            for nm in attribute_names:
+                supergroup = self._aggregate_one_attribute(
+                    nm, supergroup, subgroups
+                )
+
+            groups.append(supergroup.restore_rates(self.size_from))
+            for nm in map.subgroup_names(supergroup_name):
+                groups.append(map.group(nm))
+
+        return GroupMap(sub_to_super, groups)
+
+    def _aggregate_one_attribute(
+        self,
+        attribute_name: Hashable,
+        supergroup: Group,
+        subgroups: Iterable[Group],
+    ) -> Group:
+        """
+        Aggregate a single attribute from subgroups to supergroup.
+        """
+        subgroups = list(subgroups)
+        assert len(subgroups) > 0, "Cannot aggregate non-existent subgroups."
+        attr0 = subgroups[0].get_attribute(attribute_name)
+        act0 = attr0.impute_action
+
+        if act0 == "copy":
+            vals = set(
+                [grp.get_attribute(attribute_name) for grp in subgroups]
+            )
+            assert len(vals) == 1, (
+                f"Found multiple incompatible values for attribute named {attribute_name} in subgroups: {vals}"
+            )
+            return supergroup.add_attribute(attr0)
+        elif act0 == "impute":
+            cmt = get_args(CountMeasurementType)
+            assert isinstance(attr0, ImputableAttribute)
+            assert attr0.measurement_type in cmt, (
+                "All subgroups must have been pre-processed with `.rate_to_count()`"
+            )
+            final_type = attr0.measurement_type
+            val = attr0.value
+            for grp in subgroups[1:]:
+                attr = grp.get_attribute(attribute_name)
+                assert isinstance(attr, ImputableAttribute)
+                assert attr.measurement_type in cmt, (
+                    "All subgroups must have been pre-processed with `.rate_to_count()`"
+                )
+                if attr.measurement_type == "count_from_rate":
+                    final_type = "count_from_rate"
+                val += attr.value
+
+            return supergroup.add_attribute(
+                ImputableAttribute(
+                    value=val,
+                    name=attribute_name,
+                    impute_action="impute",
+                    measurement_type=final_type,
+                )
+            )
+        elif act0 == "ignore":
+            return supergroup
+        else:
+            raise RuntimeError(f"{act0} is not a valid ImputeAction.")
