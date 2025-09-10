@@ -247,3 +247,20 @@ The package is focused on disaggregation based on a single variable.
 By stringing together a series of such steps, disaggregation can be accomplished across multiple variables, for example, age group and age-associated risk factors.
 While this approach appears marginal, which would suggest assumptions that the joint distribution factorizes, this need not be true as different supergroups can be disaggregated according to different proportions, thus achieving a more complex joint distribution from conditional distributions.
 However, care must be taken that the desired joint distribution is sensible over the underlying variables, especially if they are continuous.
+
+## Aggregation
+
+Aggregation is the reverse operation, and under the simplifying assumptions above is straightforward.
+
+### Categorical aggregation
+
+We know the proportion-defining variables $x_{ij}$ and the subgroup measurements $y_{ij}$ for all subgroups, e.g. the numbers of individuals in all counties and their vaccination rates.
+A rate measurement must first be transformed into a count measurement, so we aggregate the number $x_{ij} y_{ij}$ vaccinated individuals in each county.
+Then the total count in state $i$ is $\hat{y}_i = \sum_j y_{ij}$.
+Rate measurements can then be transformed back into rates using the total population sizes $x_i$.
+
+### Continuous aggregation
+
+For any interval from $z_{(i)(j-1)}$ to $z_{ij}$, we know $x_{ij} = \int_{z_{(i)(j-1)}}^{z_{ij}}x(z) \mathrm{d}z$ and either count $y_{ij} = \int_{z_{(i)(j-1)}}^{z_{ij}} y(z) x(z) \mathrm{d}z$ or rate $y_{ij} = \left( \int_{z_{(i)(j-1)}}^{z_{ij}} y(z) x(z) \mathrm{d}z \right) / \left( \int_{z_{(i)(j-1)}}^{z_{ij}}x(z) \mathrm{d}z \right)$.
+If $y$ is a count, then  we simply sum up the subinterval values, getting $\hat{y}_i = \sum_j y_{ij}$, if it is a rate we must first multiply by the $x_{ij}$ as in the categorical case.
+If working with rates, after summing, we must divide by the total size $\hat{x}_i = \sum_j x_{ij}$ to obtain the total rate.
