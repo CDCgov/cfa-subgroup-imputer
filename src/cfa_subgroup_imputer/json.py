@@ -168,7 +168,9 @@ def impute(
             )
         else:
             raise RuntimeError(f"Unknown grouping variable type {group_type}")
-        imputer = Disaggregator(proportion_calculator=prop_calc)
+        imputer = Disaggregator(
+            proportion_calculator=prop_calc, size_from=size_from
+        )
         output_level = "subgroup"
     else:
         raise ValueError(f"Unknown action {action}")

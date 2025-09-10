@@ -94,8 +94,13 @@ class Disaggregator:
     A class which imputes and disaggregates subgroups.
     """
 
-    def __init__(self, proportion_calculator: ProportionCalculator):
+    def __init__(
+        self,
+        proportion_calculator: ProportionCalculator,
+        size_from: Hashable = "size",
+    ):
         self.proportion_calculator = proportion_calculator
+        self.size_from = size_from
 
     def __call__(self, map: GroupMap) -> GroupMap:
         """
@@ -112,7 +117,10 @@ class Disaggregator:
             for grp_name in map.subgroup_names(supergroup_name):
                 groups.append(
                     supergroup.disaggregate_one_subgroup(
-                        map.group(grp_name), props[grp_name]
+                        map.group(grp_name),
+                        props[grp_name],
+                        size_from=self.size_from,
+                        subgroup_size_from=self.size_from,
                     )
                 )
 
@@ -124,7 +132,7 @@ class Aggregator:
     A class which aggregates subgroups.
     """
 
-    def __init__(self, size_from: Hashable):
+    def __init__(self, size_from: Hashable = "size"):
         self.size_from = size_from
 
     def __call__(self, map: GroupMap) -> GroupMap:
@@ -138,7 +146,7 @@ class Aggregator:
         for supergroup_name in map.supergroup_names:
             supergroup = map.group(supergroup_name)
             subgroups = [
-                map.group(nm).rate_to_count()
+                map.group(nm).rate_to_count(self.size_from)
                 for nm in map.subgroup_names(supergroup_name)
             ]
             attribute_names = [a.name for a in subgroups[0].attributes]
@@ -147,7 +155,6 @@ class Aggregator:
                 supergroup = self._aggregate_one_attribute(
                     nm, supergroup, subgroups
                 )
-
             groups.append(supergroup.restore_rates(self.size_from))
             for nm in map.subgroup_names(supergroup_name):
                 groups.append(map.group(nm))
