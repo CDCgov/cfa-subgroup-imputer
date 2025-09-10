@@ -24,6 +24,19 @@ from cfa_subgroup_imputer.utils import get_json_keys, select, unique
 from cfa_subgroup_imputer.variables import GroupableTypes
 
 
+def _assert_levels_match(
+    supergroup_data: Iterable[dict[str, Any]],
+    subgroup_data: Iterable[dict[str, Any]],
+    variable: str,
+):
+    super_lvls = set([row[variable] for row in supergroup_data])
+    sub_lvls = set([row[variable] for row in subgroup_data])
+
+    assert sub_lvls == super_lvls, (
+        f"Supergroup levels for variable `{variable}` are {super_lvls} but subgroup levels are {sub_lvls}."
+    )
+
+
 def create_group_map(
     supergroup_data: Iterable[dict[str, Any]] | None,
     subgroup_data: Iterable[dict[str, Any]] | None,
@@ -141,6 +154,14 @@ def impute(
     list[dict[str, Any]]
         Data with measurements imputed for the subgroups.
     """
+
+    if loop_over:
+        raise NotImplementedError(
+            "Looping over covariates is not yet supported."
+        )
+
+    if group_type == "categorical":
+        _assert_levels_match(supergroup_data, subgroup_data, supergroups_from)
 
     group_map = create_group_map(
         supergroup_data=supergroup_data,
