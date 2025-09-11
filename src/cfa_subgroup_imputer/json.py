@@ -29,6 +29,9 @@ def _assert_levels_match(
     subgroup_data: Iterable[dict[str, Any]],
     variable: str,
 ):
+    """
+    Check that levels of the relevant variable are the same in both datasets.
+    """
     super_lvls = set([row[variable] for row in supergroup_data])
     sub_lvls = set([row[variable] for row in subgroup_data])
 
@@ -98,6 +101,33 @@ def create_group_map(
         raise RuntimeError(f"Unknown grouping variable type {group_type}")
 
 
+def expand_categorical_subgroups(
+    supergroup_data: Iterable[dict[str, Any]],
+    subgroup_data: Iterable[dict[str, Any]],
+    supergroups_from: str,
+) -> Iterable[dict[str, Any]]:
+    """
+    Ensure both supergrouping and subgrouping variables are present in `subgroup_data` as required by imputer.Disaggregator.
+    If the subgroup data has both supergrouping and subgrouping variables already, it is left alone.
+    Otherwise, takes an independent and shared categorical subgrouping variable and creates a dataframe for all
+    (supergroup level, subgroup level) pairs by recycling the subgrouping variable levels.
+
+    For example, if disaggregating per-county data into per-county-by-sex data, when assuming the same proportion of sexes in
+    all counties, the `subgroup_data` fed in might be [{"male": 0.5}, {"female": 0.5}]. This will expand it to
+    [{"male": 0.5, "county": "Adams"}, {"female": 0.5, "county": "Adams"}, ...,{"male": 0.5, "county": "Yakima"},
+    {"female": 0.5, "county": "Yakima"}].
+    """
+    if supergroups_from in get_json_keys(subgroup_data):
+        return subgroup_data
+
+    supergroup_lvls = set([row[supergroups_from] for row in supergroup_data])
+
+    expanded = []
+    for row in subgroup_data:
+        expanded += [row | {supergroups_from: lvl} for lvl in supergroup_lvls]
+    return expanded
+
+
 def impute(
     action: Literal["aggregate", "disaggregate"],
     supergroup_data: Iterable[dict[str, Any]],
@@ -161,6 +191,9 @@ def impute(
         )
 
     if group_type == "categorical":
+        subgroup_data = expand_categorical_subgroups(
+            supergroup_data, subgroup_data, supergroups_from
+        )
         _assert_levels_match(supergroup_data, subgroup_data, supergroups_from)
 
     group_map = create_group_map(

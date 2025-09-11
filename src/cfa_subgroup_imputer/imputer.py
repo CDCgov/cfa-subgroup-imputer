@@ -47,7 +47,7 @@ class ProportionsFromCategories:
             .get_attribute(self.size_from)
             .value
         )
-        normalize = kwargs.get("normalize", False)
+        normalize = kwargs.get("normalize", True)
         rel_tol = kwargs.get("rel_tol", 1e-6)
 
         if (not isclose(wt_sum, supergroup_size, rel_tol=rel_tol)) and (

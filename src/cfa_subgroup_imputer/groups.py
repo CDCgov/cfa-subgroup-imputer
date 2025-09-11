@@ -278,7 +278,7 @@ class GroupMap:
                 f"Group {group} is present in self.groups but not in self.sub_to_super"
             )
             if in_sub and in_super:
-                assert Counter(self.sub_to_super.items())[group] == 1, (
+                assert Counter(self.sub_to_super.values())[group] == 1, (
                     "Group is both a supergroup and a subgroup but is not 1:1."
                 )
 
