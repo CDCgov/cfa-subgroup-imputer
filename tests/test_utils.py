@@ -56,3 +56,9 @@ def test_unique():
     assert len(unique_rows) == 2
     for er in expected_rows:
         assert er in unique_rows
+    assert utils.unique(rows, select=["foo", "alpha"]) == [
+        {
+            "foo": "bar",
+            "alpha": "beta",
+        }
+    ]

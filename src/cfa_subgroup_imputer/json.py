@@ -20,24 +20,12 @@ from cfa_subgroup_imputer.mapping import (
     OuterProductSubgroupHandler,
     RaggedOuterProductSubgroupHandler,
 )
-from cfa_subgroup_imputer.utils import get_json_keys, select, unique
+from cfa_subgroup_imputer.utils import (
+    get_json_keys,
+    select,
+    unique,
+)
 from cfa_subgroup_imputer.variables import GroupableTypes
-
-
-def _assert_levels_match(
-    supergroup_data: Iterable[dict[str, Any]],
-    subgroup_data: Iterable[dict[str, Any]],
-    variable: str,
-):
-    """
-    Check that levels of the relevant variable are the same in both datasets.
-    """
-    super_lvls = set([row[variable] for row in supergroup_data])
-    sub_lvls = set([row[variable] for row in subgroup_data])
-
-    assert sub_lvls == super_lvls, (
-        f"Supergroup levels for variable `{variable}` are {super_lvls} but subgroup levels are {sub_lvls}."
-    )
 
 
 def create_group_map(
@@ -126,6 +114,48 @@ def expand_categorical_subgroups(
     for row in subgroup_data:
         expanded += [row | {supergroups_from: lvl} for lvl in supergroup_lvls]
     return expanded
+
+
+def expand_looping_variables(
+    data: Iterable[dict[str, Any]],
+    loop_over: Iterable[str] | None,
+) -> list[dict[str, Any]]:
+    """
+    Ensure covariates for nested dis/aggregation are present in both supergroup or subgroup data.
+    When there are no covariates to loop over, or when all covariates are present, the data is left alone.
+    When covariates are absent, rows are repeated for levels of the looping variables.
+    """
+    raise NotImplementedError(
+        "This function actually needs to take in the looping levels. Which need to be extracted from super and subgroup data by another function, which needs also to check mutual compatibility of those levels in those datasets."
+    )
+    # if loop_over is None:
+    #     return list(data)
+
+    # expanded = []
+    # for row in data:
+    #     for loop_lvl in loop_lvls:
+    #         expanded.append(row | loop_lvl)
+    # return expanded
+
+
+def get_looping_levels(
+    supergroup_data: list[dict[str, Any]],
+    subgroup_data: list[dict[str, Any]],
+    loop_over: Collection[str] = [],
+):
+    """ """
+    raise NotImplementedError("Not working yet.")
+    # data_keys = get_json_keys(data)
+
+    # if all(lo in data_keys for lo in loop_over):
+    #     return list(data)
+
+    # if any(lo in data_keys for lo in loop_over):
+    #     raise NotImplementedError(
+    #         "Partially missing looping variables are not supported."
+    #     )
+
+    # loop_lvls = unique(data, select=loop_over)
 
 
 def _impute_single_group(
@@ -224,8 +254,8 @@ def impute(
         Data with measurements imputed for the subgroups.
     """
     # Make data mutable and list-like
-    supergroup_data = list(supergroup_data)
-    subgroup_data = list(subgroup_data)
+    supergroup_data = expand_looping_variables(supergroup_data, loop_over)
+    subgroup_data = expand_looping_variables(subgroup_data, loop_over)
 
     if group_type == "categorical":
         subgroup_data = list(
@@ -233,7 +263,6 @@ def impute(
                 supergroup_data, subgroup_data, supergroups_from
             )
         )
-        _assert_levels_match(supergroup_data, subgroup_data, supergroups_from)
 
     group_map = create_group_map(
         supergroup_data=supergroup_data,
