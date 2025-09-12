@@ -55,18 +55,7 @@ class Group:
         self._validate()
 
     def __eq__(self, x: Self) -> bool:
-        if self.name != x.name:
-            return False
-
-        my_attr = set(a.name for a in self.attributes)
-        their_attr = set(a.name for a in x.attributes)
-
-        if not my_attr == their_attr:
-            return False
-
-        if not all(
-            self.get_attribute(a) == x.get_attribute(a) for a in my_attr
-        ):
+        if not self.equals_ignore_filters(x):
             return False
 
         if self.subgroup_filter_on != x.subgroup_filter_on:
@@ -141,6 +130,23 @@ class Group:
                 disagg_attributes.append(attr * prop)
         return type(self)(subgroup.name, disagg_attributes).restore_rates(
             subgroup_size_from
+        )
+
+    def equals_ignore_filters(self, x) -> bool:
+        """
+        Aside from filters, are these two Groups the same?
+        """
+        if self.name != x.name:
+            return False
+
+        my_attr = set(a.name for a in self.attributes)
+        their_attr = set(a.name for a in x.attributes)
+
+        if not my_attr == their_attr:
+            return False
+
+        return all(
+            self.get_attribute(a) == x.get_attribute(a) for a in my_attr
         )
 
     def filter(

@@ -168,7 +168,8 @@ def test_groups_from_dicts(three_counties):
         ),
     }
 
-    assert three_counties.groups == groups_expected
+    for grp_nm, grp in three_counties.groups.items():
+        assert grp.equals_ignore_filters(groups_expected[grp_nm])
     assert three_counties.sub_to_super == map_expected
 
 

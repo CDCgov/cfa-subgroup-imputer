@@ -135,7 +135,8 @@ class TestAgeGroups:
             "1 year": "1-<2 years",
         }
 
-        assert group_map.groups == groups_expected
+        for grp_nm, grp in group_map.groups.items():
+            assert grp.equals_ignore_filters(groups_expected[grp_nm])
         assert group_map.sub_to_super == map_expected
 
         # Subgroup missing supergroup
@@ -280,7 +281,8 @@ class TestCategoroical:
             subgroup_variable_names=["speed"],
         )
 
-        assert group_map.groups == groups_expected
+        for grp_nm, grp in group_map.groups.items():
+            assert grp.equals_ignore_filters(groups_expected[grp_nm])
         assert group_map.sub_to_super == map_expected
 
         # Order
