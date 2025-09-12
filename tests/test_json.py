@@ -397,6 +397,9 @@ def test_disagg_continuous_age_with_selfmap(
     ]
 
     for od, ed in zip(disagg, expected_disagg):
+        print(od)
+        print(ed)
+        print("\n")
         assert od == pytest.approx(ed)
 
 

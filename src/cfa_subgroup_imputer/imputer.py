@@ -121,6 +121,11 @@ class Disaggregator:
                         props[grp_name],
                         size_from=self.size_from,
                         subgroup_size_from=self.size_from,
+                        # In self-mappings, when an attribute is found in both the
+                        # supergroup and subgroup data, we defer to the supergroup
+                        collision_option="use_existing"
+                        if grp_name == supergroup_name
+                        else "error",
                     )
                 )
 

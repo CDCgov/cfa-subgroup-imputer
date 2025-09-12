@@ -176,7 +176,7 @@ class TestGroup:
         )
 
         child = parent.disaggregate_one_subgroup(
-            subgroup=child_precursor, prop=0.42
+            subgroup=child_precursor, prop=0.42, collision_option="error"
         )
 
         assert child == child_expected

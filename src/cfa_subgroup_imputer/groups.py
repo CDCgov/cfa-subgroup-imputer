@@ -4,6 +4,7 @@ Submodule for broad-sense handling of supergroups and subgroups.
 
 from collections import Counter
 from collections.abc import Container, Iterable, Mapping
+from math import isclose
 from typing import Any, Hashable, Literal, Self, get_args
 
 from cfa_subgroup_imputer.utils import get_json_keys
@@ -16,6 +17,7 @@ from cfa_subgroup_imputer.variables import (
 )
 
 GroupType = Literal["supergroup", "subgroup"]
+AttributeCollisionOption = Literal["error", "use_new", "use_existing"]
 
 
 class Group:
@@ -66,16 +68,33 @@ class Group:
     def __repr__(self):
         return f"Group(name={self.name}, attributes={self.attributes}, supergroup_filter_on={self.supergroup_filter_on}, subgroup_filter_on={self.subgroup_filter_on})"
 
-    def add_attribute(self, attribute: Attribute) -> Self:
+    def add_attribute(
+        self,
+        attribute: Attribute,
+        collision_option: AttributeCollisionOption = "error",
+    ) -> Self:
         """
         Give this group a new measurement.
         """
-        assert attribute.name not in [a.name for a in self.attributes], (
-            f"Cannot add measurement {attribute} to group {self.name} which already has {self.get_attribute(attribute.name)}"
-        )
-        return self._copy_modify(
-            **{"attributes": self.attributes + (attribute,)}
-        )
+        collision = attribute.name in [a.name for a in self.attributes]
+        attributes = self.attributes
+        if collision:
+            if collision_option == "error":
+                raise RuntimeError(
+                    f"Cannot add measurement {attribute} to group {self.name} which already has {self.get_attribute(attribute.name)}"
+                )
+
+            elif collision_option == "use_new":
+                attributes = tuple(
+                    [a for a in attributes if a.name != attribute.name]
+                ) + (attribute,)
+            elif collision_option != "use_existing":
+                raise RuntimeError(
+                    f"Invalid AttributeCollisionOption {collision_option}."
+                )
+        else:
+            attributes = attributes + (attribute,)
+        return self._copy_modify(**{"attributes": attributes})
 
     def add_filters(
         self,
@@ -115,22 +134,27 @@ class Group:
         self,
         subgroup: Self,
         prop: float,
+        collision_option: AttributeCollisionOption,
         size_from: Hashable = "size",
         subgroup_size_from: Hashable = "size",
     ) -> Self:
         assert 0.0 <= prop <= 1.0, (
             f"Cannot disaggregate proportion {prop} of {self}."
         )
-        disagg_attributes = list(subgroup.attributes)
+        if self == subgroup:
+            assert isclose(prop, 1.0), (
+                "Cannot disaggregate part of self in a self-mapping."
+            )
+            subgroup = subgroup.purge_ignored_attributes()
         for attr in self.rate_to_count(size_from).attributes:
             if attr.impute_action == "copy":
-                disagg_attributes.append(attr)
+                subgroup = subgroup.add_attribute(attr, collision_option)
             elif attr.impute_action == "impute":
                 assert isinstance(attr, ImputableAttribute)
-                disagg_attributes.append(attr * prop)
-        return subgroup._copy_modify(
-            **{"attributes": disagg_attributes}
-        ).restore_rates(subgroup_size_from)
+                subgroup = subgroup.add_attribute(
+                    attr * prop, collision_option
+                )
+        return subgroup.restore_rates(subgroup_size_from)
 
     def equals_ignore_filters(self, x) -> bool:
         """
@@ -230,6 +254,15 @@ class Group:
         filters = self._get_filters(group_type)
         assert filters is not None, f"{self} has no filters."
         return filters
+
+    def purge_ignored_attributes(self) -> Self:
+        """
+        For cleaning up self-mappings: remove attributes labeled to be ignored.
+        """
+        attributes = [
+            a for a in self.attributes if a.impute_action != "ignore"
+        ]
+        return self._copy_modify(**{"attributes": attributes})
 
     def rate_to_count(self, size_from: Hashable = "size") -> Self:
         """
