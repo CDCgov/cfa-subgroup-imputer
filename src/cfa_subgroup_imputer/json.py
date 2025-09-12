@@ -133,8 +133,7 @@ def _impute_single_group(
     subgroup_data: list[dict[str, Any]],
     group_map: GroupMap,
     imputer: Aggregator | Disaggregator,
-    output_level: Literal["supergroup", "subgroup"],
-    copy: set[str],
+    copy: Collection[str],
     exclude: Collection[str],
     count: Collection[str],
     rate: Collection[str],
@@ -162,7 +161,10 @@ def _impute_single_group(
     )
 
     imputed_map = imputer(grp_map)
-    return imputed_map.to_dicts(output_level)
+    group_types = (
+        "supergroup" if isinstance(imputer, Aggregator) else "subgroup"
+    )
+    return imputed_map.to_dicts(group_types)
 
 
 def impute(
@@ -245,7 +247,6 @@ def impute(
 
     if action == "aggregate":
         imputer = Aggregator(size_from)
-        output_level = "supergroup"
     elif action == "disaggregate":
         if subgroup_to_supergroup is not None or group_type == "categorical":
             prop_calc = ProportionsFromCategories(size_from=size_from)
@@ -262,7 +263,6 @@ def impute(
         imputer = Disaggregator(
             proportion_calculator=prop_calc, size_from=size_from
         )
-        output_level = "subgroup"
     else:
         raise ValueError(f"Unknown action {action}")
 
@@ -298,15 +298,13 @@ def impute(
             subgroup_data=subgroup_data,
             group_map=group_map,
             imputer=imputer,
-            output_level=output_level,
             copy=copy,
             exclude=exclude,
             count=count,
             rate=rate,
         )
 
-    # --- Looping logic from here ---
-    safe_loop_over = list(loop_over)
+    loop_over = list(loop_over)
     for grp_type, grp_info in {
         "supergroup": {
             "data": supergroup_data,
@@ -320,7 +318,7 @@ def impute(
         },
     }.items():
         assert (
-            missing := set(safe_loop_over).difference(
+            missing := set(loop_over).difference(
                 get_json_keys(grp_info["data"])
             )
         ) == set(), (
@@ -329,20 +327,18 @@ def impute(
 
         assert len(
             unique(
-                select(
-                    grp_info["data"], safe_loop_over + grp_info["groups_from"]
-                )
+                select(grp_info["data"], loop_over + grp_info["groups_from"])
             )
         ) == len(grp_info["data"]), (
             f"Provided data has multiple entries for at least one combination of group-defining variables ({grp_info['groups_from']}) and variables to loop over ({loop_over}).\n{grp_info['data']}"
         )
 
-    supergroup_data.sort(key=itemgetter(*safe_loop_over))
-    subgroup_data.sort(key=itemgetter(*safe_loop_over))
+    supergroup_data.sort(key=itemgetter(*loop_over))
+    subgroup_data.sort(key=itemgetter(*loop_over))
 
     imputed_comp = []
-    super_grouper = groupby(supergroup_data, key=itemgetter(*safe_loop_over))
-    sub_grouper = groupby(subgroup_data, key=itemgetter(*safe_loop_over))
+    super_grouper = groupby(supergroup_data, key=itemgetter(*loop_over))
+    sub_grouper = groupby(subgroup_data, key=itemgetter(*loop_over))
 
     for (super_key, super_grp), (sub_key, sub_grp) in zip(
         super_grouper, sub_grouper
@@ -355,7 +351,6 @@ def impute(
             subgroup_data=list(sub_grp),
             group_map=group_map,
             imputer=imputer,
-            output_level=output_level,
             copy=copy,
             exclude=exclude,
             count=count,
