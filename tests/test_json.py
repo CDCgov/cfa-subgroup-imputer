@@ -377,8 +377,6 @@ def test_disagg_continuous_age_with_selfmap(
             "cases": 180,
             "vaccination_rate": 0.4,
             "collection_date": "2024-01-01",
-            "notes": "young",
-            "to_exclude": "skip1",
         },
         {
             "age_group": "18-64 years",

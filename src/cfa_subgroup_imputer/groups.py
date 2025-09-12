@@ -145,7 +145,7 @@ class Group:
             assert isclose(prop, 1.0), (
                 "Cannot disaggregate part of self in a self-mapping."
             )
-            subgroup = subgroup.purge_ignored_attributes()
+            subgroup = subgroup.purge_ignored_attributes(group_type="subgroup")
         for attr in self.rate_to_count(size_from).attributes:
             if attr.impute_action == "copy":
                 subgroup = subgroup.add_attribute(attr, collision_option)
@@ -255,12 +255,15 @@ class Group:
         assert filters is not None, f"{self} has no filters."
         return filters
 
-    def purge_ignored_attributes(self) -> Self:
+    def purge_ignored_attributes(self, group_type: GroupType) -> Self:
         """
         For cleaning up self-mappings: remove attributes labeled to be ignored.
         """
+        filters = self.get_filters(group_type)
         attributes = [
-            a for a in self.attributes if a.impute_action != "ignore"
+            a
+            for a in self.attributes
+            if (a.impute_action != "ignore" or str(a.name) in filters)
         ]
         return self._copy_modify(**{"attributes": attributes})
 
