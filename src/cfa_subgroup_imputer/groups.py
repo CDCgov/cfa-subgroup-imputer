@@ -128,9 +128,9 @@ class Group:
             elif attr.impute_action == "impute":
                 assert isinstance(attr, ImputableAttribute)
                 disagg_attributes.append(attr * prop)
-        return type(self)(subgroup.name, disagg_attributes).restore_rates(
-            subgroup_size_from
-        )
+        return subgroup._copy_modify(
+            **{"attributes": disagg_attributes}
+        ).restore_rates(subgroup_size_from)
 
     def equals_ignore_filters(self, x) -> bool:
         """
@@ -246,7 +246,7 @@ class Group:
             else a
             for a in self.attributes
         ]
-        return type(self)(name=self.name, attributes=attributes)
+        return self._copy_modify(**{"attributes": attributes})
 
     def restore_rates(self, size_from: Hashable = "size") -> Self:
         """
@@ -262,7 +262,7 @@ class Group:
             else a
             for a in self.attributes
         ]
-        return type(self)(name=self.name, attributes=attributes)
+        return self._copy_modify(**{"attributes": attributes})
 
     def to_dict(self, use_json_values=False) -> dict[Hashable, Any]:
         assert self.attributes, (
