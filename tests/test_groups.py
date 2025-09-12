@@ -38,6 +38,50 @@ class TestGroup:
                 },
             )
 
+    def test_copy_modify(self):
+        original = Group(
+            name="some group",
+            attributes=[
+                Attribute(
+                    name="a variable", value=set(), impute_action="ignore"
+                ),
+            ],
+            subgroup_filter_on=["foo"],
+            supergroup_filter_on=["bar"],
+        )
+
+        renamed_expected = Group(
+            name="otherwise the same group",
+            attributes=[
+                Attribute(
+                    name="a variable", value=set(), impute_action="ignore"
+                ),
+            ],
+            subgroup_filter_on=["foo"],
+            supergroup_filter_on=["bar"],
+        )
+
+        new_attr = [
+            Attribute(
+                name="another variable",
+                value=set(),
+                impute_action="ignore",
+            )
+        ]
+        reattributed_expected = Group(
+            name="some group",
+            attributes=new_attr,
+            subgroup_filter_on=["foo"],
+            supergroup_filter_on=["bar"],
+        )
+
+        renamed = original._copy_modify(**{"name": "otherwise the same group"})
+        reattributed = original._copy_modify(**{"attributes": new_attr})
+        print(reattributed)
+        print(reattributed_expected)
+        assert renamed == renamed_expected
+        assert reattributed == reattributed_expected
+
     def test_access(self):
         attr = Attribute(
             name="an attribute", value={"a": "value"}, impute_action="ignore"
