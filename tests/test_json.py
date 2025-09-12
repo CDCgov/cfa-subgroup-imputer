@@ -84,6 +84,15 @@ def age_subgroups():
     ]
 
 
+@pytest.fixture
+def age_subgroups_selfmap():
+    return [
+        {"age_group": "0-17 years"},
+        {"age_group": "18-64 years"},
+        {"age_group": "65+ years"},
+    ]
+
+
 def test_groups_from_dicts(three_counties):
     map_expected = {
         ("Sutter", "California"): "California",
@@ -159,7 +168,8 @@ def test_groups_from_dicts(three_counties):
         ),
     }
 
-    assert three_counties.groups == groups_expected
+    for grp_nm, grp in three_counties.groups.items():
+        assert grp.equals_ignore_filters(groups_expected[grp_nm])
     assert three_counties.sub_to_super == map_expected
 
 
@@ -340,6 +350,54 @@ def test_disagg_continuous_age(age_group_data, age_subgroups):
     ]
 
     for od, ed in zip(disagg, expected_disagg):
+        assert od == pytest.approx(ed)
+
+
+def test_disagg_continuous_age_with_selfmap(
+    age_group_data, age_subgroups_selfmap
+):
+    disagg = disaggregate(
+        supergroup_data=age_group_data,
+        subgroup_data=age_subgroups_selfmap,
+        subgroup_to_supergroup=None,
+        supergroups_from="age_group",
+        subgroups_from="age_group",
+        group_type="age",
+        loop_over=[],
+        rate=["vaccination_rate"],
+        count=["cases", "size"],
+        copy=["collection_date"],
+        exclude=["notes", "to_exclude"],
+    )
+
+    expected_disagg = [
+        {
+            "age_group": "0-17 years",
+            "size": 1800,
+            "cases": 180,
+            "vaccination_rate": 0.4,
+            "collection_date": "2024-01-01",
+        },
+        {
+            "age_group": "18-64 years",
+            "size": 4700.0,
+            "cases": 470.0,
+            "vaccination_rate": 0.8,
+            "collection_date": "2024-01-01",
+        },
+        {
+            "age_group": "65+ years",
+            "size": 3500.0,
+            "cases": 350.0,
+            "vaccination_rate": 0.8,
+            "collection_date": "2024-01-01",
+        },
+    ]
+
+    for od, ed in zip(disagg, expected_disagg):
+        print(od)
+        print(ed)
+        print("\n")
         assert od == pytest.approx(ed)
 
 

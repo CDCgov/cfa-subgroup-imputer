@@ -20,7 +20,11 @@ from cfa_subgroup_imputer.mapping import (
     OuterProductSubgroupHandler,
     RaggedOuterProductSubgroupHandler,
 )
-from cfa_subgroup_imputer.utils import get_json_keys, select, unique
+from cfa_subgroup_imputer.utils import (
+    get_json_keys,
+    select,
+    unique,
+)
 from cfa_subgroup_imputer.variables import GroupableTypes
 
 
@@ -85,6 +89,114 @@ def create_group_map(
         raise RuntimeError(f"Unknown grouping variable type {group_type}")
 
 
+def expand_categorical_subgroups(
+    supergroup_data: Iterable[dict[str, Any]],
+    subgroup_data: Iterable[dict[str, Any]],
+    supergroups_from: str,
+) -> Iterable[dict[str, Any]]:
+    """
+    Ensure both supergrouping and subgrouping variables are present in `subgroup_data` as required by imputer.Disaggregator.
+    If the subgroup data has both supergrouping and subgrouping variables already, it is left alone.
+    Otherwise, takes an independent and shared categorical subgrouping variable and creates a dataframe for all
+    (supergroup level, subgroup level) pairs by recycling the subgrouping variable levels.
+
+    For example, if disaggregating per-county data into per-county-by-sex data, when assuming the same proportion of sexes in
+    all counties, the `subgroup_data` fed in might be [{"male": 0.5}, {"female": 0.5}]. This will expand it to
+    [{"male": 0.5, "county": "Adams"}, {"female": 0.5, "county": "Adams"}, ...,{"male": 0.5, "county": "Yakima"},
+    {"female": 0.5, "county": "Yakima"}].
+    """
+    if supergroups_from in get_json_keys(subgroup_data):
+        return subgroup_data
+
+    supergroup_lvls = set([row[supergroups_from] for row in supergroup_data])
+
+    expanded = []
+    for row in subgroup_data:
+        expanded += [row | {supergroups_from: lvl} for lvl in supergroup_lvls]
+    return expanded
+
+
+def expand_looping_variables(
+    data: Iterable[dict[str, Any]],
+    loop_over: Iterable[str] | None,
+) -> list[dict[str, Any]]:
+    """
+    Ensure covariates for nested dis/aggregation are present in both supergroup or subgroup data.
+    When there are no covariates to loop over, or when all covariates are present, the data is left alone.
+    When covariates are absent, rows are repeated for levels of the looping variables.
+    """
+    raise NotImplementedError(
+        "This function actually needs to take in the looping levels. Which need to be extracted from super and subgroup data by another function, which needs also to check mutual compatibility of those levels in those datasets."
+    )
+    # if loop_over is None:
+    #     return list(data)
+
+    # expanded = []
+    # for row in data:
+    #     for loop_lvl in loop_lvls:
+    #         expanded.append(row | loop_lvl)
+    # return expanded
+
+
+def get_looping_levels(
+    supergroup_data: list[dict[str, Any]],
+    subgroup_data: list[dict[str, Any]],
+    loop_over: Collection[str] = [],
+):
+    """ """
+    raise NotImplementedError("Not working yet.")
+    # data_keys = get_json_keys(data)
+
+    # if all(lo in data_keys for lo in loop_over):
+    #     return list(data)
+
+    # if any(lo in data_keys for lo in loop_over):
+    #     raise NotImplementedError(
+    #         "Partially missing looping variables are not supported."
+    #     )
+
+    # loop_lvls = unique(data, select=loop_over)
+
+
+def _impute_single_group(
+    supergroup_data: list[dict[str, Any]],
+    subgroup_data: list[dict[str, Any]],
+    group_map: GroupMap,
+    imputer: Aggregator | Disaggregator,
+    copy: Collection[str],
+    exclude: Collection[str],
+    count: Collection[str],
+    rate: Collection[str],
+) -> list[dict[str, Any]]:
+    """
+    Helper function to run imputation on a single group of data.
+    """
+    grp_map = deepcopy(group_map)
+
+    grp_map.data_from_dicts(
+        supergroup_data,
+        "supergroup",
+        copy=copy,
+        exclude=exclude,
+        count=count,
+        rate=rate,
+    )
+    grp_map.data_from_dicts(
+        subgroup_data,
+        "subgroup",
+        copy=copy,
+        exclude=exclude,
+        count=count,
+        rate=rate,
+    )
+
+    imputed_map = imputer(grp_map)
+    group_types = (
+        "supergroup" if isinstance(imputer, Aggregator) else "subgroup"
+    )
+    return imputed_map.to_dicts(group_types)
+
+
 def impute(
     action: Literal["aggregate", "disaggregate"],
     supergroup_data: Iterable[dict[str, Any]],
@@ -141,6 +253,16 @@ def impute(
     list[dict[str, Any]]
         Data with measurements imputed for the subgroups.
     """
+    # Make data mutable and list-like
+    supergroup_data = expand_looping_variables(supergroup_data, loop_over)
+    subgroup_data = expand_looping_variables(subgroup_data, loop_over)
+
+    if group_type == "categorical":
+        subgroup_data = list(
+            expand_categorical_subgroups(
+                supergroup_data, subgroup_data, supergroups_from
+            )
+        )
 
     group_map = create_group_map(
         supergroup_data=supergroup_data,
@@ -154,7 +276,6 @@ def impute(
 
     if action == "aggregate":
         imputer = Aggregator(size_from)
-        output_level = "supergroup"
     elif action == "disaggregate":
         if subgroup_to_supergroup is not None or group_type == "categorical":
             prop_calc = ProportionsFromCategories(size_from=size_from)
@@ -168,55 +289,11 @@ def impute(
             )
         else:
             raise RuntimeError(f"Unknown grouping variable type {group_type}")
-        imputer = Disaggregator(proportion_calculator=prop_calc)
-        output_level = "subgroup"
+        imputer = Disaggregator(
+            proportion_calculator=prop_calc, size_from=size_from
+        )
     else:
         raise ValueError(f"Unknown action {action}")
-
-    # Add a dummy variable to loop over if none are provided
-    if not loop_over:
-        safe_loop_over = ["dummy"]
-        supergroup_data = [d | {"dummy": "dummy"} for d in supergroup_data]
-        subgroup_data = [d | {"dummy": "dummy"} for d in subgroup_data]
-    else:
-        safe_loop_over = list(loop_over)
-        supergroup_data = [d for d in supergroup_data]
-        subgroup_data = [d for d in subgroup_data]
-
-    for grp_type, grp_info in {
-        "supergroup": {
-            "data": supergroup_data,
-            "groups_from": [supergroups_from],
-            "n_groups": len(group_map.supergroup_names),
-        },
-        "subgroup": {
-            "data": subgroup_data,
-            "groups_from": [subgroups_from] + [supergroups_from]
-            if group_type == "categorical"
-            else [subgroups_from],
-            "n_groups": len(group_map.subgroup_names()),
-        },
-    }.items():
-        assert (
-            missing := set(safe_loop_over).difference(
-                get_json_keys(grp_info["data"])
-            )
-        ) == set(), (
-            f"Looping variables are missing from {grp_type} data: {missing}"
-        )
-
-        assert len(
-            unique(
-                select(
-                    grp_info["data"], safe_loop_over + grp_info["groups_from"]
-                )
-            )
-        ) == len(grp_info["data"]), (
-            f"Provided data has multiple entries for at least one combination of group-defining variables ({grp_info['groups_from']}) and variables to loop over ({loop_over}).\n{grp_info['data']}"
-        )
-
-    supergroup_data.sort(key=itemgetter(*safe_loop_over))
-    subgroup_data.sort(key=itemgetter(*safe_loop_over))
 
     # If we're not told what to do with the column, and it's not being used to compute proportions, copy it
     if subgroup_to_supergroup is not None or group_type == "categorical":
@@ -235,7 +312,7 @@ def impute(
 
     copy = (
         set(get_json_keys(copy_from))
-        .difference(safe_loop_over)
+        .difference(loop_over)
         .difference(exclude)
         .difference(rate)
         .difference(count)
@@ -243,10 +320,54 @@ def impute(
         # TODO: this is somewhat redundant with data_from_json knowing not to copy group-defining variables
         .difference([groups_from])
     )
-    imputed_comp = []
 
-    super_grouper = groupby(supergroup_data, key=itemgetter(*safe_loop_over))
-    sub_grouper = groupby(subgroup_data, key=itemgetter(*safe_loop_over))
+    if not loop_over:
+        return _impute_single_group(
+            supergroup_data=supergroup_data,
+            subgroup_data=subgroup_data,
+            group_map=group_map,
+            imputer=imputer,
+            copy=copy,
+            exclude=exclude,
+            count=count,
+            rate=rate,
+        )
+
+    loop_over = list(loop_over)
+    for grp_type, grp_info in {
+        "supergroup": {
+            "data": supergroup_data,
+            "groups_from": [supergroups_from],
+        },
+        "subgroup": {
+            "data": subgroup_data,
+            "groups_from": [subgroups_from] + [supergroups_from]
+            if group_type == "categorical"
+            else [subgroups_from],
+        },
+    }.items():
+        assert (
+            missing := set(loop_over).difference(
+                get_json_keys(grp_info["data"])
+            )
+        ) == set(), (
+            f"Looping variables are missing from {grp_type} data: {missing}"
+        )
+
+        assert len(
+            unique(
+                select(grp_info["data"], loop_over + grp_info["groups_from"])
+            )
+        ) == len(grp_info["data"]), (
+            f"Provided data has multiple entries for at least one combination of group-defining variables ({grp_info['groups_from']}) and variables to loop over ({loop_over}).\n{grp_info['data']}"
+        )
+
+    supergroup_data.sort(key=itemgetter(*loop_over))
+    subgroup_data.sort(key=itemgetter(*loop_over))
+
+    imputed_comp = []
+    super_grouper = groupby(supergroup_data, key=itemgetter(*loop_over))
+    sub_grouper = groupby(subgroup_data, key=itemgetter(*loop_over))
 
     for (super_key, super_grp), (sub_key, sub_grp) in zip(
         super_grouper, sub_grouper
@@ -254,32 +375,17 @@ def impute(
         assert super_key == sub_key, (
             "Mismatch in looping variables between supergroup and subgroup data"
         )
-        grp_map = deepcopy(group_map)
-
-        grp_map.data_from_dicts(
-            list(super_grp),
-            "supergroup",
+        result = _impute_single_group(
+            supergroup_data=list(super_grp),
+            subgroup_data=list(sub_grp),
+            group_map=group_map,
+            imputer=imputer,
             copy=copy,
             exclude=exclude,
             count=count,
             rate=rate,
         )
-        grp_map.data_from_dicts(
-            list(sub_grp),
-            "subgroup",
-            copy=copy,
-            exclude=exclude,
-            count=count,
-            rate=rate,
-        )
-
-        imputed_map = imputer(grp_map)
-        imputed_comp.extend(imputed_map.to_dicts(output_level))
-
-    # Remove dummy variable if it was added
-    if not loop_over:
-        for row in imputed_comp:
-            del row["dummy"]
+        imputed_comp.extend(result)
 
     return imputed_comp
 

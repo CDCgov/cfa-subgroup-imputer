@@ -4,6 +4,7 @@ Submodule for broad-sense handling of supergroups and subgroups.
 
 from collections import Counter
 from collections.abc import Container, Iterable, Mapping
+from math import isclose
 from typing import Any, Hashable, Literal, Self, get_args
 
 from cfa_subgroup_imputer.utils import get_json_keys
@@ -16,6 +17,7 @@ from cfa_subgroup_imputer.variables import (
 )
 
 GroupType = Literal["supergroup", "subgroup"]
+AttributeCollisionOption = Literal["error", "use_new", "use_existing"]
 
 
 class Group:
@@ -27,7 +29,8 @@ class Group:
         self,
         name: Hashable,
         attributes: Iterable[Attribute] = [],
-        filter_on: Iterable[str] | None = None,
+        supergroup_filter_on: Iterable[str] | None = None,
+        subgroup_filter_on: Iterable[str] | None = None,
     ):
         """
         Group constructor
@@ -49,10 +52,114 @@ class Group:
         """
         self.name = name
         self.attributes = tuple(attributes)
-        self.filter_on = filter_on
+        self.supergroup_filter_on = supergroup_filter_on
+        self.subgroup_filter_on = subgroup_filter_on
         self._validate()
 
-    def __eq__(self, x: Self):
+    def __eq__(self, x: Self) -> bool:
+        if not self.equals_ignore_filters(x):
+            return False
+
+        if self.subgroup_filter_on != x.subgroup_filter_on:
+            return False
+
+        return self.supergroup_filter_on == x.supergroup_filter_on
+
+    def __repr__(self):
+        return f"Group(name={self.name}, attributes={self.attributes}, supergroup_filter_on={self.supergroup_filter_on}, subgroup_filter_on={self.subgroup_filter_on})"
+
+    def add_attribute(
+        self,
+        attribute: Attribute,
+        collision_option: AttributeCollisionOption = "error",
+    ) -> Self:
+        """
+        Give this group a new measurement.
+        """
+        collision = attribute.name in [a.name for a in self.attributes]
+        attributes = self.attributes
+        if collision:
+            if collision_option == "error":
+                raise RuntimeError(
+                    f"Cannot add measurement {attribute} to group {self.name} which already has {self.get_attribute(attribute.name)}"
+                )
+
+            elif collision_option == "use_new":
+                attributes = tuple(
+                    [a for a in attributes if a.name != attribute.name]
+                ) + (attribute,)
+            elif collision_option != "use_existing":
+                raise RuntimeError(
+                    f"Invalid AttributeCollisionOption {collision_option}."
+                )
+        else:
+            attributes = attributes + (attribute,)
+        return self._copy_modify(**{"attributes": attributes})
+
+    def add_filters(
+        self,
+        filters: Iterable[str],
+        group_type: GroupType,
+        overwrite: bool = False,
+    ) -> Self:
+        """
+        Add keys that this group can use to filter an Iterable[dict] to find its row.
+        """
+
+        if ((f := self._get_filters(group_type)) is not None) and (
+            not overwrite
+        ):
+            raise RuntimeError(f"{self} already has filters: {f}")
+
+        if group_type == "subgroup":
+            key = "subgroup_filter_on"
+        elif group_type == "supergroup":
+            key = "supergroup_filter_on"
+        else:
+            raise RuntimeError(f"Invalid GroupType {group_type}.")
+
+        return self._copy_modify(**{key: filters})
+
+    def _copy_modify(self, **kwargs) -> Self:
+        copy_kwargs = {
+            "name": self.name,
+            "attributes": self.attributes,
+            "supergroup_filter_on": self.supergroup_filter_on,
+            "subgroup_filter_on": self.subgroup_filter_on,
+        } | kwargs
+
+        return type(self)(**copy_kwargs)
+
+    def disaggregate_one_subgroup(
+        self,
+        subgroup: Self,
+        prop: float,
+        collision_option: AttributeCollisionOption,
+        size_from: Hashable = "size",
+        subgroup_size_from: Hashable = "size",
+    ) -> Self:
+        assert 0.0 <= prop <= 1.0, (
+            f"Cannot disaggregate proportion {prop} of {self}."
+        )
+        if self == subgroup:
+            assert isclose(prop, 1.0), (
+                "Cannot disaggregate part of self in a self-mapping."
+            )
+            subgroup = subgroup.purge_ignored_attributes(group_type="subgroup")
+        for attr in self.rate_to_count(size_from).attributes:
+            if attr.impute_action == "copy":
+                subgroup = subgroup.add_attribute(attr, collision_option)
+            elif attr.impute_action == "impute":
+                assert isinstance(attr, ImputableAttribute)
+                subgroup = subgroup.add_attribute(
+                    attr * prop, collision_option
+                )
+        return subgroup.restore_rates(subgroup_size_from)
+
+    def equals_ignore_filters(self, x) -> bool:
+        """
+        Aside from filters, are these two Groups the same?
+        """
         if self.name != x.name:
             return False
 
@@ -66,66 +173,14 @@ class Group:
             self.get_attribute(a) == x.get_attribute(a) for a in my_attr
         )
 
-    def __repr__(self):
-        return f"Group(name={self.name}, attributes={[a for a in self.attributes]})"
-
-    def _validate(self):
-        assert all([isinstance(a, Attribute) for a in self.attributes]), (
-            "All attributes must be of class Attribute"
-        )
-        measurement_names = [a.name for a in self.attributes]
-        assert len(set(measurement_names)) == len(measurement_names), (
-            f"Found multiple measurements for same attribute when constructing group named {self.name}: {measurement_names}"
-        )
-        to_impute = set(
-            a.name for a in self.attributes if a.impute_action == "impute"
-        )
-        imputable = set(
-            a.name
-            for a in self.attributes
-            if isinstance(a, ImputableAttribute)
-        )
-        assert to_impute.issubset(imputable), (
-            f"The following attributes are requested to be imputed but are not imputable: {to_impute.difference(imputable)}"
-        )
-
-    def add_attribute(self, attribute: Attribute) -> Self:
-        """
-        Give this group a new measurement.
-        """
-        assert attribute.name not in [a.name for a in self.attributes], (
-            f"Cannot add measurement {attribute} to group {self.name} which already has {self.get_attribute(attribute.name)}"
-        )
-        return type(self)(
-            name=self.name, attributes=self.attributes + (attribute,)
-        )
-
-    def disaggregate_one_subgroup(
-        self,
-        subgroup: Self,
-        prop: float,
-        size_from: Hashable = "size",
-        subgroup_size_from: Hashable = "size",
-    ) -> Self:
-        assert 0.0 <= prop <= 1.0, (
-            f"Cannot disaggregate proportion {prop} of {self}."
-        )
-        disagg_attributes = list(subgroup.attributes)
-        for attr in self.rate_to_count(size_from).attributes:
-            if attr.impute_action == "copy":
-                disagg_attributes.append(attr)
-            elif attr.impute_action == "impute":
-                assert isinstance(attr, ImputableAttribute)
-                disagg_attributes.append(attr * prop)
-        return type(self)(subgroup.name, disagg_attributes).restore_rates(
-            subgroup_size_from
-        )
-
     def filter(
-        self, data: Iterable[dict[str, Any]], assert_unique: bool = True
+        self,
+        data: Iterable[dict[str, Any]],
+        group_type: GroupType,
+        assert_unique: bool = True,
     ) -> list[dict]:
-        assert self.filter_on is not None, f"{self} has nothing to filter on."
-        assert all(isinstance(fo, str) for fo in self.filter_on), (
+        filters = self.get_filters(group_type)
+        assert all(isinstance(fo, str) for fo in filters), (
             f"{self} has non-str elements in `filter_on`."
         )
 
@@ -134,7 +189,7 @@ class Group:
                 lambda row: all(
                     row[filter_key]
                     == self.get_attribute(filter_key).json_value
-                    for filter_key in self.filter_on  # pyright: ignore[reportOptionalIterable]
+                    for filter_key in filters
                 ),
                 data,
             )
@@ -173,6 +228,45 @@ class Group:
         """
         return [self.get_attribute(name) for name in names]
 
+    def _get_filters(
+        self,
+        group_type: GroupType,
+    ) -> Iterable[str] | None:
+        """
+        Get keys that this group can use to filter an Iterable[dict] to find its row, if there are any.
+        """
+
+        if group_type == "subgroup":
+            return self.subgroup_filter_on
+        elif group_type == "supergroup":
+            return self.supergroup_filter_on
+        else:
+            raise RuntimeError(f"Invalid GroupType {group_type}.")
+
+    def get_filters(
+        self,
+        group_type: GroupType,
+    ) -> Iterable[str]:
+        """
+        Get keys that this group can use to filter an Iterable[dict] to find its row or die trying.
+        """
+
+        filters = self._get_filters(group_type)
+        assert filters is not None, f"{self} has no filters."
+        return filters
+
+    def purge_ignored_attributes(self, group_type: GroupType) -> Self:
+        """
+        For cleaning up self-mappings: remove attributes labeled to be ignored.
+        """
+        filters = self.get_filters(group_type)
+        attributes = [
+            a
+            for a in self.attributes
+            if (a.impute_action != "ignore" or str(a.name) in filters)
+        ]
+        return self._copy_modify(**{"attributes": attributes})
+
     def rate_to_count(self, size_from: Hashable = "size") -> Self:
         """
         Make all measurements masses.
@@ -188,7 +282,7 @@ class Group:
             else a
             for a in self.attributes
         ]
-        return type(self)(name=self.name, attributes=attributes)
+        return self._copy_modify(**{"attributes": attributes})
 
     def restore_rates(self, size_from: Hashable = "size") -> Self:
         """
@@ -204,7 +298,7 @@ class Group:
             else a
             for a in self.attributes
         ]
-        return type(self)(name=self.name, attributes=attributes)
+        return self._copy_modify(**{"attributes": attributes})
 
     def to_dict(self, use_json_values=False) -> dict[Hashable, Any]:
         assert self.attributes, (
@@ -222,6 +316,26 @@ class Group:
         as_dict = self.to_dict(use_json_values=True)
 
         return as_dict  # pyright: ignore[reportReturnType]
+
+    def _validate(self):
+        assert all([isinstance(a, Attribute) for a in self.attributes]), (
+            "All attributes must be of class Attribute"
+        )
+        measurement_names = [a.name for a in self.attributes]
+        assert len(set(measurement_names)) == len(measurement_names), (
+            f"Found multiple measurements for same attribute when constructing group named {self.name}: {measurement_names}"
+        )
+        to_impute = set(
+            a.name for a in self.attributes if a.impute_action == "impute"
+        )
+        imputable = set(
+            a.name
+            for a in self.attributes
+            if isinstance(a, ImputableAttribute)
+        )
+        assert to_impute.issubset(imputable), (
+            f"The following attributes are requested to be imputed but are not imputable: {to_impute.difference(imputable)}"
+        )
 
 
 class GroupMap:
@@ -278,7 +392,7 @@ class GroupMap:
                 f"Group {group} is present in self.groups but not in self.sub_to_super"
             )
             if in_sub and in_super:
-                assert Counter(self.sub_to_super.items())[group] == 1, (
+                assert Counter(self.sub_to_super.values())[group] == 1, (
                     "Group is both a supergroup and a subgroup but is not 1:1."
                 )
 
@@ -358,7 +472,9 @@ class GroupMap:
         else:
             raise RuntimeError(f"Unknown group type {group_type}")
         for grp_name in group_names:
-            self.group(grp_name).filter_on = filters
+            self.groups[grp_name] = self.group(grp_name).add_filters(
+                filters, group_type
+            )
 
     def group(self, name: Hashable) -> Group:
         return self.groups[name]
@@ -411,7 +527,7 @@ class GroupMap:
         # We can do better than O(n^2)
         all_grps_all_vals: dict[Hashable, dict[str, Any]] = {
             grp_name: self.group(grp_name).filter(
-                data_list, assert_unique=True
+                data_list, group_type, assert_unique=True
             )[0]
             for grp_name in group_names
         }
@@ -447,7 +563,7 @@ class GroupMap:
 
         all_filters = []
         for grp_name in group_names:
-            grp_filters = self.group(grp_name).filter_on
+            grp_filters = self.group(grp_name).get_filters(group_type)
             assert grp_filters is not None, (
                 f"Group named {grp_name} has no filter"
             )

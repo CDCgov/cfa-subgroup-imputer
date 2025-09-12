@@ -41,11 +41,18 @@ def _tuple_to_dict(x: tuple, keys: Sequence[Hashable]):
     return {k: v for k, v in zip(keys, x)}
 
 
-def unique(x: Iterable[dict]) -> list[dict]:
+def unique(
+    x: Iterable[dict], select: Iterable[Hashable] | None = None
+) -> list[dict]:
     """
-    Get only the rows out of an iterable of dicts that are unique.
+    Get only the rows out of an iterable of dicts that are unique for selected keys (default is all keys).
     """
     keys = get_keys(x)
+
+    if select is not None:
+        assert all(k in keys for k in select)
+        keys = list(select)
+
     tuples = [_dict_to_tuple(row, keys) for row in x]
     unique_tuples = list(set(tuples))
     return [_tuple_to_dict(row, keys) for row in unique_tuples]
