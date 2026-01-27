@@ -192,7 +192,7 @@ Our model here is
 \hat{y}_i = \int_{z_{i - 1}}^{z_{i}} y(z) x(z) \mathrm{d}z
 ```
 
-Each of these ranges is further subdivided by breakpoints $ z*{ij} \in z*{i0}, \dots, z\_{iJ_i}$.
+Each of these ranges is further subdivided by breakpoints $z_{ij} \in z_{i0}, \dots, z_{iJ_i}$.
 Analogously to above we have
 
 ```math
