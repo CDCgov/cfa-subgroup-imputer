@@ -5,7 +5,6 @@ The scope of disaggregatable variables is discussed [below](#imputable-values), 
 It is focused on disaggregating subgroups of homogeneous supergroups, though extensions are possible to non-homogenous cases when the source of heterogeneity, and its effect, are known and available in the data.
 This package does not infer models for disaggregating.
 
-
 ## Preliminary notes on terminology and assumptions
 
 ⚠️ This notation should not be considered finalized.
@@ -17,7 +16,6 @@ For our purposes, a group is an arbitrary subpopulation (possibly the entire pop
 In particular, we are thinking about groups of people, so while the mathematical presentation is general, the scope may in practice be somewhat more restricted.
 A group becomes a subgroup or supergroup only in relation to other groups.
 In particular, subgroups and supergroups are important for [tracking the flow of data](#aggregating-and-disaggregating).
-
 
 We will assume that subgroups provided comprise the entire supergroup.
 That is, that there won't be a supergroup of children under 18 with subgroups 1-11 year olds, and 12-17 year olds, as this is missing infants less than one year old.
@@ -39,7 +37,8 @@ Groups may have arbitrary forms of data associated with them,
 However, as stated, the focus of this package is on disaggregating values which reflect in one some sense, in some form or another, actual counts in groups.
 Handling of other values is done much more simply.
 
-We formalize this with a class hierarchy.
+We formalize this with a class hierarchy:
+
 - An `Attribute` is essentially a tuple of:
   - A `name` specifying what this is (e.g. corresponding to the column name in a spreadsheet).
   - A `value` which can be anything.
@@ -60,6 +59,7 @@ Values which can be imputed are one of two types.
 Count-like attributes are distributed proportionately to subgroups.
 For example, if we had the count of vaccinated individuals in the supergroup as the attribute, then each subgroup gets assigned a proportion of this total, according to [some model](#what-is-subgroup-imputation-anyways).
 Quantities that fall into this category are:
+
 - The size of the group itself, that is, the number of people (which [can be imputed, if needed](#a-special-case-when)).
 - Hospitalization, infection, or case counts.
 - Counts of vaccinated individuals.
@@ -67,12 +67,14 @@ Quantities that fall into this category are:
 A rate-like attribute refers to a _per-capita_ rate, and as such it can be disaggregated if the size of the group is available.
 Rate-like attributes are first transformed into count-like measurements by scaling by the appropriate variable in the supergroup (usually, supergroup size), splitting that quantity proportionately, and finally re-scaling by the variable's value in the subgroup.
 Quantities that fall into this category are:
+
 - Per-capita hospitalization, infection, or case rates.
 - Proportions of a population vaccinated.
 - The proportion of a population successfully protected via immunization (though this is, in practice, less likely to be homogenous).
 - $R$, as it is the number of secondary infections per primary infection. The same disclaimer as with wastewater concentrations applies. Note that if disaggregating purely on size, the homogeneity assumption amounts to assuming that the same proportion of each subgroup is infected.
 
 Examples of things this package is unsuitable for disaggregating:
+
 - Concentration parameters (e.g., for negative binomial models), standard deviations, and most other dispersion parameters. (Variances are additive, so variances of something summed over subgroups could be split if strong assumptions about covariances are made.)
 - Contact (or other) networks, DAGS, or other graphs. These aren't things to which a notion of apportioning applies.
 
@@ -82,9 +84,9 @@ There are two related problems when handling subgroups and supergroups.
 The first of these is _mapping_.
 Only after subgroups have been mapped can supergroups be disaggregated, or aggregated.
 
-
 To take age groups as an example, consider that we have measurements for supergroups "0-3 years", "4-11 years", and "12-17 years", and that we want to impute measurements on yearly age subgroups.
 Mapping is the process of specifying that the subgroup to supergroup map is:
+
 ```python
 sub_to_super = {
     "0 years" : "0-3 years",
@@ -110,10 +112,10 @@ sub_to_super = {
 
 Both subgroups and supergroups are defined by values of some _variable_.
 The package provides support for automatically creating mappings for:
+
 1. Age groups, via the `AgeGroupHandler`, in which both subgroups and supergroups are defined by age.
 2. Subgroups which are defined by a categorical random variable which is _distinct_ from the one defines supergroups, and for which all levels are present in all supergroups, via the `OuterProductHandler`. For example, stratifying regional supergroups by vaccination status, where the supergroups are defined by region, and subgroups are defined by the vaccination status _and_ region.
 3. Case 2. except that not all subgroup categories are present in all supergroup categories. For example, if the supergroups are states and the subgroups are counties. In this case, all pairs of subgroup and supergroup categories needed must be provided.
-
 
 ## What is subgroup disaggregation anyways?
 
@@ -123,9 +125,11 @@ From this (these) other variable(s), we can in some way obtain a set of proporti
 
 Supergroup $i$ has subgroups $j \in 1, \dots J_i$, and proportion vector $\boldsymbol{\pi}_i = \pi_{i1}, \dots \pi_{iJ_i}$, with $1 = \sum_j \pi_{ij}$.
 We will impute
+
 ```math
 \hat{y}_{ij} = \pi_{ij} \hat{y}_i
 ```
+
 We convert densities to masses before disaggregation so that we can retain this mass-splitting paradigm for all subgroup disaggregation.
 
 Subgroup disaggregation is thus the problem of defining and computing $\boldsymbol{\pi}(\mathbf{x})$.
@@ -144,6 +148,7 @@ In this case, it is assumed that the same weight model $\boldsymbol{\pi}(\mathbf
 This is perhaps the simplest of all disaggregation cases.
 There is a single categorical subgrouping variable, and we have either rate or count measurements for each subgroup.
 Here we have
+
 ```math
 \pi_{ij} = \frac{x_{ij}}{\sum_j x_{ij}} = \frac{x_{ij}}{x_{i}}
 ```
@@ -159,9 +164,11 @@ This assumption about proportionality among subgroups is baked into this disaggr
 Supergroup $i$ has $\hat{y}_i$ vaccinated individuals, to each subgroup of which we distribute a fraction $\pi_{ij} = x_{ij} / x_i$.
 It is instructive to look at the implied vaccination _rates_.
 For supergroup $i$ that is $\hat{y}_i / x_i$, and for subgroup $ij$ it is
+
 ```math
 \frac{\hat{y}_{ij}}{x_{ij}} = \frac{(x_{ij} / x_i) \hat{y}_i}{x_{ij}} = \frac{\hat{y}_{i}}{x_{i}}
 ```
+
 Thus, we have assumed that the vaccination rate is uniform across the age supergroups.
 
 What if our data weren't numbers of vaccinated individuals but vaccination rates?
@@ -180,12 +187,14 @@ In the uniform density case, there is a single variable $x(z)$ which is used to 
 
 The supergroups are defined by ranges of $z$ specified by breakpoints $z_0, \dots, z_I$, with supergroup $i$ spanning $z_{i - 1}$ to $z_i$.
 Our model here is
+
 ```math
 \hat{y}_i = \int_{z_{i - 1}}^{z_{i}} y(z) x(z) \mathrm{d}z
 ```
 
-Each of these ranges is further subdivided by breakpoints $ z_{ij} \in z_{i0}, \dots, z_{iJ_i}$.
+Each of these ranges is further subdivided by breakpoints $z_{ij} \in z_{i0}, \dots, z_{iJ_i}$.
 Analogously to above we have
+
 ```math
 \hat{y}_{ij} = \int_{z_{(i)(j-1)}}^{z_{ij}} y(z) x(z) \mathrm{d}z
 ```
@@ -193,25 +202,32 @@ Analogously to above we have
 Making this equation useable in practice requires imposing more structure on the integral.
 The package offers one option for this (though more may eventually be added), in which we assume that $y(z)$ is piecewise constant functions, uniform on the intervals $z_{i - 1}$ to $z_i$.
 In this case,
+
 ```math
 \hat{y}_i = \int_{z_{i - 1}}^{z_{i}} y_i x(z) \mathrm{d}z = y_i \int_{z_{i - 1}}^{z_{i}} x(z) \mathrm{d}z = y_i x_i
 ```
+
 where assume that we know the integrated value $x_i$ measured for each group.
 Thus
+
 ```math
 y_i = \frac{\hat{y_i}}{x_i}
 ```
 
 Applying the piecewise constant definition to the subgroup equation, we obtain
+
 ```math
 \hat{y}_{ij} = \frac{\hat{y}_i}{x_i} \int_{z_{(i)(j-1)}}^{z_{ij}} x(z) \mathrm{d}z = \frac{\hat{y}_i}{x_i} x_{ij}
 ```
+
 where again we assume we know the integrated value $x_{ij}$ for each subgroup.
 
 Rearranging, we obtain
+
 ```math
 \hat{y}_{ij} = \frac{x_{ij}}{x_i} \hat{y}_i
 ```
+
 which fits into the stated weight-based framework with $\pi_{ij} = x_{ij} / x_i$.
 It also fits into the categorical approach above if we define $w_{ij}$ to be 0 for all subgroups not contained within a supergroup, as $\sum_j x_{ij} = x_i$.
 Thus, this framework is also a uniform density approach.
@@ -262,5 +278,5 @@ Rate measurements can then be transformed back into rates using the total popula
 ### Continuous aggregation
 
 For any interval from $z_{(i)(j-1)}$ to $z_{ij}$, we know $x_{ij} = \int_{z_{(i)(j-1)}}^{z_{ij}}x(z) \mathrm{d}z$ and either count $y_{ij} = \int_{z_{(i)(j-1)}}^{z_{ij}} y(z) x(z) \mathrm{d}z$ or rate $y_{ij} = \left( \int_{z_{(i)(j-1)}}^{z_{ij}} y(z) x(z) \mathrm{d}z \right) / \left( \int_{z_{(i)(j-1)}}^{z_{ij}}x(z) \mathrm{d}z \right)$.
-If $y$ is a count, then  we simply sum up the subinterval values, getting $\hat{y}_i = \sum_j y_{ij}$, if it is a rate we must first multiply by the $x_{ij}$ as in the categorical case.
+If $y$ is a count, then we simply sum up the subinterval values, getting $\hat{y}_i = \sum_j y_{ij}$, if it is a rate we must first multiply by the $x_{ij}$ as in the categorical case.
 If working with rates, after summing, we must divide by the total size $\hat{x}_i = \sum_j x_{ij}$ to obtain the total rate.
