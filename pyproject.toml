@@ -5,7 +5,10 @@ description = "A package for imputing subgroups from supergroups."
 readme = "README.md"
 authors = [{name = "Andrew Magee", email = "rzg0@cdc.gov"}]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "numpy>=2.4.1",
+    "polars>=1.37.1",
+]
 
 [tool.uv]
 package = true
