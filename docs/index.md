@@ -1,5 +1,7 @@
 # cfa-subgroup-imputer
 
+*⚠️ This project is deprecated.* See the [deprecation notes](deprecation.md).
+
 This is a package for working with [groups](#groups), specifically for disaggregating values from supergroups to subgroups, and, eventually, for the reverse operation, aggregating values from subgroups to supergroups.
 The scope of disaggregatable variables is discussed [below](#imputable-values), but, roughly, is any variable which can be expressed as either a count or a ratio of counts per something.
 It is focused on disaggregating subgroups of homogeneous supergroups, though extensions are possible to non-homogenous cases when the source of heterogeneity, and its effect, are known and available in the data.
