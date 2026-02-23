@@ -1,6 +1,6 @@
 # cfa-subgroup-imputer
 
-_⚠️ This project is deprecated._
+_⚠️ This project is [deprecated](docs/deprecation.md)._
 
 ## Overview
 
