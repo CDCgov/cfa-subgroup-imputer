@@ -2,6 +2,7 @@ site_name: cfa-subgroup-imputer
 
 nav:
   - index.md
+  - deprecation.md
   - api.md
 
 repo_url: https://github.com/cdcent/cfa-mkdocs-template
