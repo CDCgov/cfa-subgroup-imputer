@@ -30,22 +30,16 @@ class Group:
         filter_on: Iterable[str] | None = None,
     ):
         """
-        Group constructor
+        Group constructor.
 
         Parameters
         ----------
-        name : Hashable
-            The name defining the group.
-        group_vartype: float
-            The size of the group, e.g. number of people in it.
-        weight_adjustment: float
-            A value that accounts for a relative increase or decrease in how much mass a
-            subgroup contributes to a measurement compared to its size.
-        weight: float | None
-            Composite of size and weight_adjustment relative to other groups.
-            Should not be touched except by GroupMap.
-        measurements: Iterable[ImputableMeasurement] | None
-            Optional values that can be imputed from supergroups to subgroups (and back).
+        name
+            Name defining the group.
+        attributes
+            Attributes currently attached to the group.
+        filter_on
+            Keys used to identify this group in tabular JSON-like data.
         """
         self.name = name
         self.attributes = tuple(attributes)
@@ -91,7 +85,17 @@ class Group:
 
     def add_attribute(self, attribute: Attribute) -> Self:
         """
-        Give this group a new measurement.
+        Return a new group with one additional attribute.
+
+        Parameters
+        ----------
+        attribute
+            Attribute to append.
+
+        Returns
+        -------
+        Group
+            A new group containing all existing attributes plus `attribute`.
         """
         assert attribute.name not in [a.name for a in self.attributes], (
             f"Cannot add measurement {attribute} to group {self.name} which already has {self.get_attribute(attribute.name)}"
@@ -149,7 +153,17 @@ class Group:
 
     def _get_attribute(self, name: Hashable) -> Attribute | None:
         """
-        Get stated attribute, if it exists.
+        Get a named attribute if present.
+
+        Parameters
+        ----------
+        name
+            Attribute name to retrieve.
+
+        Returns
+        -------
+        Attribute or None
+            The matching attribute, or `None` if not found.
         """
         name_matched = [a for a in self.attributes if a.name == name]
         if len(name_matched) == 0:
@@ -161,7 +175,17 @@ class Group:
 
     def get_attribute(self, name: Hashable) -> Attribute:
         """
-        Retrieve stated attribute or die trying.
+        Retrieve a named attribute.
+
+        Parameters
+        ----------
+        name
+            Attribute name to retrieve.
+
+        Returns
+        -------
+        Attribute
+            The matching attribute.
         """
         attr = self._get_attribute(name)
         assert attr is not None, f"{self} has no attribute {name}"
@@ -169,13 +193,33 @@ class Group:
 
     def get_attributes(self, names: Iterable[Hashable]) -> Iterable[Attribute]:
         """
-        Retrieve stated attribute or die trying.
+        Retrieve multiple named attributes.
+
+        Parameters
+        ----------
+        names
+            Attribute names to retrieve.
+
+        Returns
+        -------
+        list
+            Attributes in the same order as `names`.
         """
         return [self.get_attribute(name) for name in names]
 
     def rate_to_count(self, size_from: Hashable = "size") -> Self:
         """
-        Make all measurements masses.
+        Convert imputable rate-like attributes into count-like attributes.
+
+        Parameters
+        ----------
+        size_from
+            Name of the attribute containing group size.
+
+        Returns
+        -------
+        Group
+            A new group with converted measurement types where applicable.
         """
 
         size = self.get_attribute(size_from).value
@@ -192,7 +236,17 @@ class Group:
 
     def restore_rates(self, size_from: Hashable = "size") -> Self:
         """
-        Undo density_to_mass().
+        Convert imputable count-from-rate attributes back to rates.
+
+        Parameters
+        ----------
+        size_from
+            Name of the attribute containing group size.
+
+        Returns
+        -------
+        Group
+            A new group with restored rate-like attributes where applicable.
         """
         size = self.get_attribute(size_from).value
         assert size > 0

@@ -44,7 +44,7 @@ class Mapper(Protocol):
 class RaggedOuterProductSubgroupHandler(ABC):
     def construct_group_map(self, **kwargs) -> GroupMap:
         """
-        Uses a Sequence of Sequences of Hashables to construct a GroupMap. Each inner Sequence
+        Uses category combinations to construct a GroupMap. Each inner combination
         defines, in order, the category in each variable that defines a group. The last variable
         is taken to be the one which defines the supergroup.
 
@@ -52,7 +52,7 @@ class RaggedOuterProductSubgroupHandler(ABC):
         defines two supergroups, "child" and "adult", and three subgroups,
         "low risk child", "high risk child", and "low risk adult".
 
-        If provided, a second Sequence (`"variable_names"`) of the names of the variables is used
+        If provided, `variable_names` is used
         when populating the group attributes.
         """
         assert "category_combinations" in kwargs
@@ -127,6 +127,10 @@ class OuterProductSubgroupHandler:
 
     def construct_group_map(
         self,
+        supergroup_categories: Sequence[Hashable],
+        subgroup_categories: Sequence[Sequence[Hashable]],
+        supergroup_variable_name: str,
+        subgroup_variable_names: Sequence,
         **kwargs,
     ) -> GroupMap:
         """
@@ -135,49 +139,34 @@ class OuterProductSubgroupHandler:
 
         Parameters
         ----------
-        supergroup_categories: Sequence[Hashable]
+        supergroup_categories
             The catgegories of the variable defining the supergroups.
-        subgroup_categories: Sequence[Sequence[Hashable]]
+        subgroup_categories
             For each variable defining subgroups, the catgegories it can take.
-        supergroup_variable_name: str
+        supergroup_variable_name
             What is the variable that defines the supergroup?
-        subgroup_variable_names: Sequence[str]
+        subgroup_variable_names
             What are the variables that defines the subgroups?
         """
-        assert "supergroup_categories" in kwargs
-        super_cats: Sequence[Hashable] = kwargs.get("supergroup_categories")  # type: ignore
-        assert_hashable_sequence(super_cats)
-
-        assert "subgroup_categories" in kwargs
-        sub_cats: Sequence[Sequence[Hashable]] = kwargs.get(
-            "subgroup_categories"
-        )  # type: ignore
-        assert isinstance(sub_cats, Sequence)
-        for sc in sub_cats:
+        assert_hashable_sequence(supergroup_categories)
+        assert isinstance(subgroup_categories, Sequence)
+        for sc in subgroup_categories:
             assert_hashable_sequence(sc)
 
-        sub_super = itertools.product(*[*sub_cats, list(super_cats)])
-
-        supergroup_varname = kwargs.get(
-            "supergroup_variable_name", "supergroup_variable"
+        sub_super = itertools.product(
+            *[*subgroup_categories, list(supergroup_categories)]
         )
-        if "subgroup_variable_names" in kwargs:
-            subgroup_variable_names = kwargs.get("subgroup_variable_names")
-            assert isinstance(subgroup_variable_names, Sequence)
-            assert len(subgroup_variable_names) == len(sub_cats)
-            assert all(
-                isinstance(var_name, str)
-                for var_name in subgroup_variable_names
-            )
-        else:
-            subgroup_variable_names = [
-                f"subgroup_variable_{i}" for i in range(len(sub_cats))
-            ]
+
+        assert isinstance(subgroup_variable_names, Sequence)
+        assert len(subgroup_variable_names) == len(subgroup_categories)
+        assert all(
+            isinstance(var_name, str) for var_name in subgroup_variable_names
+        )
 
         return RaggedOuterProductSubgroupHandler().construct_group_map(
             category_combinations=list(sub_super),
             variable_names=list(subgroup_variable_names)
-            + [supergroup_varname],
+            + [supergroup_variable_name],
         )
 
 
@@ -252,7 +241,7 @@ class AgeGroupHandler:
 
     Each element is a tuple of
     - A regex which can extract the single age or the low/high ages and
-    - A Callable which returns a (low, high,) tuple of floats for ages in years
+    - A function that returns a `(low, high)` tuple for ages in years
     """
 
     def __init__(self, age_max: float | None = None):
@@ -260,7 +249,7 @@ class AgeGroupHandler:
 
     def age_range_from_str(self, x: str) -> Range:
         """
-        Takes string defining age group and returns a (low, high,) float defining the range in years.
+        Parse an age-group string into a lower and upper bound in years.
         """
         for sarc in AgeGroupHandler.STR_AGE_RANGE_CONVERTERS:
             if ages := sarc[0].fullmatch(x):
@@ -284,6 +273,23 @@ class AgeGroupHandler:
         subgroups: Iterable[str],
         **kwargs,
     ) -> GroupMap:
+        """
+        Construct a group map by assigning each subgroup to a containing supergroup.
+
+        Parameters
+        ----------
+        supergroups
+            Supergroup labels.
+        subgroups
+            Subgroup labels.
+        **kwargs
+            Optional options, including `continuous_var_name` and `missing_option`.
+
+        Returns
+        -------
+        GroupMap
+            Group mapping with age-range attributes and filters populated.
+        """
         age_varname = kwargs.get("continuous_var_name", "age")
         missing_option = kwargs.get("missing_option", "error")
 

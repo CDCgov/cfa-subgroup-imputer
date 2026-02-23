@@ -50,14 +50,14 @@ class Attribute:
 
         Parameters
         ----------
-        value : Any
+        value
             The value of the variable.
-        name : Hashable
+        name
             What is this variable? E.g., "size" or "vaccination rate"
-        impute_action: ImputeAction
+        impute_action
             What should we do with this measurement when disaggregating?
             Note that just because we can impute it doesn't mean we will.
-        json_value : Any
+        json_value
             If the `value` is not something recorded directly in a dataframe,
             this specifies how to compare to values in json and
             how to output this value to a json.  None means to use the value.
@@ -118,16 +118,16 @@ class ImputableAttribute(Attribute):
 
         Parameters
         ----------
-        value : float | int
+        value
             The value, e.g. a number of cases.
-        name : Hashable
+        name
             What is this variable? E.g., "size" or "vaccination rate"
-        impute_action: ImputeAction
+        impute_action
             What should we do with this measurement when disaggregating?
             Note that just because we can impute it doesn't mean we will.
-        type: MeasurementType
+        measurement_type
             What kind of imputable attribute is this?
-        json_value : Any
+        json_value
             If the `value` is not something recorded directly in a dataframe,
             this specifies how to compare to values in json and
             how to output this value to a json.  None means to use the value.
@@ -195,14 +195,10 @@ class Range:
 
     Parameters
     ----------
-    lower : float
+    lower
         Value at the lower end of the range.
-    lower_included: bool
-        Is the range inclusive of the lower value?
-    upper : float
+    upper
         Value at the upper end of the range.
-    upper_included: bool
-        Is the range inclusive of the upper value?
     """
 
     def __init__(
